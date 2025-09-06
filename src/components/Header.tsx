@@ -20,8 +20,12 @@ const Header = () => {
         </nav>
         
         <div className="flex items-center space-x-3">
-          <Button variant="ghost" className="hidden md:inline-flex">Sign In</Button>
-          <Button variant="hero">Get Started</Button>
+          <Button variant="ghost" className="hidden md:inline-flex" asChild>
+            <a href="/auth">Sign In</a>
+          </Button>
+          <Button variant="hero" asChild>
+            <a href="/auth">Get Started</a>
+          </Button>
           <Button variant="ghost" size="icon" className="md:hidden">
             <Menu className="h-5 w-5" />
           </Button>
