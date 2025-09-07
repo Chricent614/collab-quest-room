@@ -11,6 +11,9 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
+import Groups from "./pages/Groups";
+import Messages from "./pages/Messages";
+import Resources from "./pages/Resources";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -82,6 +85,21 @@ const App = () => (
             <Route path="/profile" element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            } />
+            <Route path="/groups" element={
+              <ProtectedRoute>
+                <Groups />
+              </ProtectedRoute>
+            } />
+            <Route path="/messages" element={
+              <ProtectedRoute>
+                <Messages />
+              </ProtectedRoute>
+            } />
+            <Route path="/resources" element={
+              <ProtectedRoute>
+                <Resources />
               </ProtectedRoute>
             } />
             <Route path="/settings" element={

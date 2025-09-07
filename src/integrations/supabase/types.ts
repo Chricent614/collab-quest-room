@@ -175,6 +175,51 @@ export type Database = {
           },
         ]
       }
+      peer_reviews: {
+        Row: {
+          created_at: string | null
+          group_id: string
+          id: string
+          rating: number | null
+          review_content: string | null
+          reviewed_by: string | null
+          status: string | null
+          submission_content: string | null
+          submission_file_url: string | null
+          submission_title: string
+          submitted_by: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          group_id: string
+          id?: string
+          rating?: number | null
+          review_content?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          submission_content?: string | null
+          submission_file_url?: string | null
+          submission_title: string
+          submitted_by: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          group_id?: string
+          id?: string
+          rating?: number | null
+          review_content?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          submission_content?: string | null
+          submission_file_url?: string | null
+          submission_title?: string
+          submitted_by?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       post_reactions: {
         Row: {
           created_at: string | null
@@ -313,6 +358,7 @@ export type Database = {
           last_name: string
           phone: string | null
           phone_verified: boolean | null
+          role: string | null
           school: string | null
           updated_at: string | null
           user_id: string
@@ -328,6 +374,7 @@ export type Database = {
           last_name: string
           phone?: string | null
           phone_verified?: boolean | null
+          role?: string | null
           school?: string | null
           updated_at?: string | null
           user_id: string
@@ -343,9 +390,88 @@ export type Database = {
           last_name?: string
           phone?: string | null
           phone_verified?: boolean | null
+          role?: string | null
           school?: string | null
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      resources: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          file_type: string | null
+          file_url: string | null
+          group_id: string
+          id: string
+          tags: string[] | null
+          title: string
+          updated_at: string | null
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          file_type?: string | null
+          file_url?: string | null
+          group_id: string
+          id?: string
+          tags?: string[] | null
+          title: string
+          updated_at?: string | null
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          file_type?: string | null
+          file_url?: string | null
+          group_id?: string
+          id?: string
+          tags?: string[] | null
+          title?: string
+          updated_at?: string | null
+          uploaded_by?: string
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          assigned_to: string | null
+          created_at: string | null
+          created_by: string
+          description: string | null
+          due_date: string | null
+          group_id: string
+          id: string
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string | null
+          created_by: string
+          description?: string | null
+          due_date?: string | null
+          group_id: string
+          id?: string
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string | null
+          created_by?: string
+          description?: string | null
+          due_date?: string | null
+          group_id?: string
+          id?: string
+          status?: string | null
+          title?: string
+          updated_at?: string | null
         }
         Relationships: []
       }

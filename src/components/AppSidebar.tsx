@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Home, Users, MessageCircle, Settings, User, Newspaper, Heart, Search, Plus } from "lucide-react";
+import { Home, Users, MessageCircle, Settings, User, Newspaper, Heart, Search, Plus, BookOpen, ClipboardList, PenTool } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import {
@@ -20,8 +20,9 @@ const mainItems = [
   { title: "Profile", url: "/profile", icon: User },
   { title: "Groups", url: "/groups", icon: Users },
   { title: "Messages", url: "/messages", icon: MessageCircle },
-  { title: "News Feed", url: "/news", icon: Newspaper },
-  { title: "Discover", url: "/discover", icon: Search },
+  { title: "Resources", url: "/resources", icon: BookOpen },
+  { title: "Tasks", url: "/tasks", icon: ClipboardList },
+  { title: "Peer Review", url: "/peer-review", icon: PenTool },
 ];
 
 const quickActions = [
