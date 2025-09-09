@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
-import { Heart, MessageCircle, Share2, ThumbsDown, Send } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Heart, MessageCircle, Share2, ThumbsDown, Send, Image, Video, Radio, FileText } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -11,7 +13,11 @@ import { useToast } from '@/components/ui/use-toast';
 interface Post {
   id: string;
   content: string;
+  content_type: string;
   image_url?: string;
+  video_url?: string;
+  is_live: boolean;
+  live_stream_url?: string;
   created_at: string;
   profiles: {
     first_name: string;
@@ -38,7 +44,10 @@ const Dashboard = () => {
   const { toast } = useToast();
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPost, setNewPost] = useState('');
+  const [postType, setPostType] = useState<'text' | 'photo' | 'video' | 'live'>('text');
+  const [mediaUrl, setMediaUrl] = useState('');
   const [loading, setLoading] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchPosts();
@@ -87,16 +96,30 @@ const Dashboard = () => {
 
       if (!profile) throw new Error('Profile not found');
 
+      const postData: any = {
+        content: newPost,
+        author_id: profile.id,
+        content_type: postType,
+        is_live: postType === 'live'
+      };
+
+      if (postType === 'photo' && mediaUrl) {
+        postData.image_url = mediaUrl;
+      } else if (postType === 'video' && mediaUrl) {
+        postData.video_url = mediaUrl;
+      } else if (postType === 'live' && mediaUrl) {
+        postData.live_stream_url = mediaUrl;
+      }
+
       const { error } = await supabase
         .from('posts')
-        .insert({
-          content: newPost,
-          author_id: profile.id
-        });
+        .insert(postData);
 
       if (error) throw error;
 
       setNewPost('');
+      setMediaUrl('');
+      setPostType('text');
       fetchPosts();
       toast({
         title: "Success",
@@ -107,6 +130,35 @@ const Dashboard = () => {
       toast({
         title: "Error",
         description: "Failed to create post",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const bucket = postType === 'photo' ? 'profile-avatars' : 'resources';
+      
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+      setMediaUrl(data.publicUrl);
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload file",
         variant: "destructive"
       });
     }
@@ -192,13 +244,79 @@ const Dashboard = () => {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <Select value={postType} onValueChange={(value: any) => setPostType(value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select post type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="text">
+                <div className="flex items-center">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Text Post
+                </div>
+              </SelectItem>
+              <SelectItem value="photo">
+                <div className="flex items-center">
+                  <Image className="mr-2 h-4 w-4" />
+                  Photo Post
+                </div>
+              </SelectItem>
+              <SelectItem value="video">
+                <div className="flex items-center">
+                  <Video className="mr-2 h-4 w-4" />
+                  Video Post
+                </div>
+              </SelectItem>
+              <SelectItem value="live">
+                <div className="flex items-center">
+                  <Radio className="mr-2 h-4 w-4" />
+                  Live Stream
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
           <Textarea
             placeholder="Write something..."
             value={newPost}
             onChange={(e) => setNewPost(e.target.value)}
             className="min-h-20"
           />
+
+          {(postType === 'photo' || postType === 'video') && (
+            <div className="space-y-2">
+              <Input
+                type="file"
+                ref={fileInputRef}
+                accept={postType === 'photo' ? 'image/*' : 'video/*'}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file);
+                }}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full"
+              >
+                {postType === 'photo' ? 'Upload Photo' : 'Upload Video'}
+              </Button>
+              {mediaUrl && (
+                <p className="text-sm text-muted-foreground">File uploaded successfully!</p>
+              )}
+            </div>
+          )}
+
+          {postType === 'live' && (
+            <Input
+              placeholder="Enter live stream URL (e.g., YouTube, Twitch)"
+              value={mediaUrl}
+              onChange={(e) => setMediaUrl(e.target.value)}
+            />
+          )}
         </CardContent>
         <CardFooter>
           <Button onClick={createPost} disabled={!newPost.trim()}>
@@ -230,13 +348,46 @@ const Dashboard = () => {
             </div>
           </CardHeader>
           <CardContent>
+            <div className="flex items-center mb-2">
+              {post.content_type === 'photo' && <Image className="mr-2 h-4 w-4 text-muted-foreground" />}
+              {post.content_type === 'video' && <Video className="mr-2 h-4 w-4 text-muted-foreground" />}
+              {post.content_type === 'live' && <Radio className="mr-2 h-4 w-4 text-red-500" />}
+              {post.content_type === 'text' && <FileText className="mr-2 h-4 w-4 text-muted-foreground" />}
+              <span className="text-sm text-muted-foreground capitalize">
+                {post.content_type} {post.is_live ? 'Live' : ''} Post
+              </span>
+            </div>
+            
             <p className="text-foreground">{post.content}</p>
+            
             {post.image_url && (
               <img 
                 src={post.image_url} 
                 alt="Post image" 
                 className="mt-4 rounded-lg max-w-full h-auto"
               />
+            )}
+            
+            {post.video_url && (
+              <video 
+                src={post.video_url} 
+                controls
+                className="mt-4 rounded-lg max-w-full h-auto"
+              />
+            )}
+            
+            {post.live_stream_url && (
+              <div className="mt-4">
+                <div className="flex items-center mb-2">
+                  <Radio className="mr-2 h-4 w-4 text-red-500 animate-pulse" />
+                  <span className="text-red-500 font-medium">Live Stream</span>
+                </div>
+                <iframe
+                  src={post.live_stream_url}
+                  className="w-full h-64 rounded-lg"
+                  allowFullScreen
+                />
+              </div>
             )}
           </CardContent>
           <CardFooter className="flex justify-between">

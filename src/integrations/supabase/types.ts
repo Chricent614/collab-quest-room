@@ -263,29 +263,41 @@ export type Database = {
         Row: {
           author_id: string
           content: string
+          content_type: string | null
           created_at: string | null
           group_id: string | null
           id: string
           image_url: string | null
+          is_live: boolean | null
+          live_stream_url: string | null
           updated_at: string | null
+          video_url: string | null
         }
         Insert: {
           author_id: string
           content: string
+          content_type?: string | null
           created_at?: string | null
           group_id?: string | null
           id?: string
           image_url?: string | null
+          is_live?: boolean | null
+          live_stream_url?: string | null
           updated_at?: string | null
+          video_url?: string | null
         }
         Update: {
           author_id?: string
           content?: string
+          content_type?: string | null
           created_at?: string | null
           group_id?: string | null
           id?: string
           image_url?: string | null
+          is_live?: boolean | null
+          live_stream_url?: string | null
           updated_at?: string | null
+          video_url?: string | null
         }
         Relationships: [
           {
@@ -518,7 +530,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_group_memberships: {
+        Args: { user_uuid?: string }
+        Returns: {
+          group_id: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
