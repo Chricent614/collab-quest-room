@@ -536,6 +536,18 @@ export type Database = {
           group_id: string
         }[]
       }
+      get_user_profile_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      is_admin_of_group: {
+        Args: { group_uuid: string }
+        Returns: boolean
+      }
+      is_member_of_group: {
+        Args: { group_uuid: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
