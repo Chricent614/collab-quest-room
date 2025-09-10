@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
-import { Send, MessageSquare, Users } from 'lucide-react';
+import { Send, MessageSquare, Users, Bot } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface Message {
@@ -45,6 +45,7 @@ const Messages = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showChatbot, setShowChatbot] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -174,6 +175,69 @@ const Messages = () => {
     }
   };
 
+  const sendChatbotMessage = async () => {
+    if (!newMessage.trim()) return;
+
+    const userMessage = newMessage.trim();
+    setNewMessage('');
+
+    // Add user message to chat
+    const userChatMessage = {
+      id: `user-${Date.now()}`,
+      content: userMessage,
+      created_at: new Date().toISOString(),
+      sender_id: 'user',
+      receiver_id: 'chatbot',
+      sender: { first_name: 'You', last_name: '', avatar_url: '' },
+      receiver: { first_name: 'Assistant', last_name: '', avatar_url: '' }
+    };
+
+    setMessages(prev => [...prev, userChatMessage]);
+
+    // Generate bot response
+    const botResponses = [
+      "I'm here to help! What would you like to know?",
+      "That's an interesting question. Let me think about that...",
+      "I understand. How can I assist you further?",
+      "Thanks for sharing that with me. Is there anything specific you need help with?",
+      "I'm a simple chatbot. For more advanced features, you might want to integrate with a service like OpenAI or Claude.",
+      "How has your day been going? I'm here to chat!",
+      "That's a great point. What else would you like to discuss?",
+      "I appreciate you reaching out. What's on your mind?"
+    ];
+
+    setTimeout(() => {
+      const botMessage = {
+        id: `bot-${Date.now()}`,
+        content: botResponses[Math.floor(Math.random() * botResponses.length)],
+        created_at: new Date().toISOString(),
+        sender_id: 'chatbot',
+        receiver_id: 'user',
+        sender: { first_name: 'Assistant', last_name: '', avatar_url: '' },
+        receiver: { first_name: 'You', last_name: '', avatar_url: '' }
+      };
+      setMessages(prev => [...prev, botMessage]);
+    }, 1000);
+  };
+
+  const startChatbot = () => {
+    setShowChatbot(true);
+    setSelectedConversation(null);
+    setMessages([]);
+    
+    // Initial bot greeting
+    const greeting = {
+      id: `bot-${Date.now()}`,
+      content: "Hello! I'm your AI assistant. How can I help you today?",
+      created_at: new Date().toISOString(),
+      sender_id: 'chatbot',
+      receiver_id: 'user',
+      sender: { first_name: 'Assistant', last_name: '', avatar_url: '' },
+      receiver: { first_name: 'You', last_name: '', avatar_url: '' }
+    };
+    setMessages([greeting]);
+  };
+
   const selectedConversationData = conversations.find(conv => conv.user_id === selectedConversation);
 
   if (loading) {
@@ -189,9 +253,20 @@ const Messages = () => {
       {/* Conversations List */}
       <Card className="w-1/3 mr-4">
         <CardHeader>
-          <CardTitle className="flex items-center">
-            <MessageSquare className="mr-2 h-5 w-5" />
-            Messages
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center">
+              <MessageSquare className="mr-2 h-5 w-5" />
+              Messages
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={startChatbot}
+              className="flex items-center gap-2"
+            >
+              <Bot className="h-4 w-4" />
+              AI Chat
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -204,13 +279,16 @@ const Messages = () => {
               </div>
             ) : (
               conversations.map((conversation) => (
-                <div
-                  key={conversation.user_id}
-                  className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
-                    selectedConversation === conversation.user_id ? 'bg-muted' : ''
-                  }`}
-                  onClick={() => setSelectedConversation(conversation.user_id)}
-                >
+                  <div
+                    key={conversation.user_id}
+                    className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
+                      selectedConversation === conversation.user_id && !showChatbot ? 'bg-muted' : ''
+                    }`}
+                    onClick={() => {
+                      setSelectedConversation(conversation.user_id);
+                      setShowChatbot(false);
+                    }}
+                  >
                   <div className="flex items-center space-x-3">
                     <Avatar>
                       <AvatarImage src={conversation.avatar_url} />
@@ -241,7 +319,62 @@ const Messages = () => {
 
       {/* Chat Area */}
       <Card className="flex-1">
-        {selectedConversation ? (
+        {showChatbot ? (
+          <>
+            <CardHeader className="border-b">
+              <CardTitle className="flex items-center">
+                <Avatar className="mr-3">
+                  <AvatarFallback>
+                    <Bot className="h-4 w-4" />
+                  </AvatarFallback>
+                </Avatar>
+                AI Assistant
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 flex flex-col h-[500px]">
+              <ScrollArea className="flex-1 p-4">
+                <div className="space-y-4">
+                  {messages.map((message) => {
+                    const isFromBot = message.sender_id === 'chatbot';
+                    
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex ${isFromBot ? 'justify-start' : 'justify-end'}`}
+                      >
+                        <div
+                          className={`max-w-[70%] rounded-lg p-3 ${
+                            isFromBot
+                              ? 'bg-muted'
+                              : 'bg-primary text-primary-foreground'
+                          }`}
+                        >
+                          <p className="text-sm">{message.content}</p>
+                          <p className={`text-xs mt-1 ${isFromBot ? 'text-muted-foreground' : 'text-primary-foreground/70'}`}>
+                            {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+              <div className="border-t p-4">
+                <div className="flex space-x-2">
+                  <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Ask the AI assistant anything..."
+                    onKeyPress={(e) => e.key === 'Enter' && sendChatbotMessage()}
+                  />
+                  <Button onClick={sendChatbotMessage} size="icon">
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </>
+        ) : selectedConversation ? (
           <>
             <CardHeader className="border-b">
               <CardTitle className="flex items-center">
