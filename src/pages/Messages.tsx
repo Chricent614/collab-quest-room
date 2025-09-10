@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 import { Send, MessageSquare, Users, Bot } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import VoiceChatbot from '@/components/VoiceChatbot';
 
 interface Message {
   id: string;
@@ -320,60 +321,14 @@ const Messages = () => {
       {/* Chat Area */}
       <Card className="flex-1">
         {showChatbot ? (
-          <>
-            <CardHeader className="border-b">
-              <CardTitle className="flex items-center">
-                <Avatar className="mr-3">
-                  <AvatarFallback>
-                    <Bot className="h-4 w-4" />
-                  </AvatarFallback>
-                </Avatar>
-                AI Assistant
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 flex flex-col h-[500px]">
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4">
-                  {messages.map((message) => {
-                    const isFromBot = message.sender_id === 'chatbot';
-                    
-                    return (
-                      <div
-                        key={message.id}
-                        className={`flex ${isFromBot ? 'justify-start' : 'justify-end'}`}
-                      >
-                        <div
-                          className={`max-w-[70%] rounded-lg p-3 ${
-                            isFromBot
-                              ? 'bg-muted'
-                              : 'bg-primary text-primary-foreground'
-                          }`}
-                        >
-                          <p className="text-sm">{message.content}</p>
-                          <p className={`text-xs mt-1 ${isFromBot ? 'text-muted-foreground' : 'text-primary-foreground/70'}`}>
-                            {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-              <div className="border-t p-4">
-                <div className="flex space-x-2">
-                  <Input
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Ask the AI assistant anything..."
-                    onKeyPress={(e) => e.key === 'Enter' && sendChatbotMessage()}
-                  />
-                  <Button onClick={sendChatbotMessage} size="icon">
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </>
+          <CardContent className="p-0 flex flex-col h-[500px]">
+            <VoiceChatbot
+              messages={messages}
+              setMessages={setMessages}
+              newMessage={newMessage}
+              setNewMessage={setNewMessage}
+            />
+          </CardContent>
         ) : selectedConversation ? (
           <>
             <CardHeader className="border-b">
