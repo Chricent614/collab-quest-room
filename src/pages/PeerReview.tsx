@@ -49,6 +49,7 @@ const PeerReview = () => {
     title: '',
     content: '',
     group_id: '',
+    file_url: '',
     file: null as File | null
   });
   const [reviewData, setReviewData] = useState({
@@ -122,6 +123,33 @@ const PeerReview = () => {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const fileName = `${user?.id}/${Date.now()}-${file.name}`;
+      const { data, error } = await supabase.storage
+        .from('group-files')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('group-files')
+        .getPublicUrl(fileName);
+
+      setFormData({ ...formData, file_url: publicUrl });
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload file",
+        variant: "destructive"
+      });
+    }
+  };
+
   const submitForReview = async () => {
     if (!formData.title || !formData.group_id) {
       toast({
@@ -178,7 +206,7 @@ const PeerReview = () => {
         description: "Submission uploaded for peer review!"
       });
 
-      setFormData({ title: '', content: '', group_id: '', file: null });
+      setFormData({ title: '', content: '', group_id: '', file_url: '', file: null });
       setIsDialogOpen(false);
       fetchSubmissions();
       fetchMySubmissions();
@@ -306,6 +334,15 @@ const PeerReview = () => {
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                   placeholder="Your work content or description"
                   rows={4}
+                />
+              </div>
+              <div>
+                <Label htmlFor="file">Upload File (Optional)</Label>
+                <Input
+                  id="file"
+                  type="file"
+                  onChange={handleFileUpload}
+                  className="mt-2"
                 />
               </div>
               <div>

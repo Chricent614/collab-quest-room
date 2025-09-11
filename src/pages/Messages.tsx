@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Send, MessageSquare, Users, Bot } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import VoiceChatbot from '@/components/VoiceChatbot';
+import FriendSuggestions from '@/components/FriendSuggestions';
 
 interface Message {
   id: string;
@@ -38,14 +39,6 @@ interface Conversation {
   unread_count: number;
 }
 
-interface Friend {
-  id: string;
-  first_name: string;
-  last_name: string;
-  avatar_url?: string;
-  bio?: string;
-}
-
 const Messages = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -55,13 +48,10 @@ const Messages = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [showChatbot, setShowChatbot] = useState(false);
-  const [suggestedFriends, setSuggestedFriends] = useState<Friend[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchConversations();
-      fetchSuggestedFriends();
     }
   }, [user]);
 
@@ -118,44 +108,10 @@ const Messages = () => {
       });
 
       setConversations(Array.from(conversationMap.values()));
-      
-      // Show suggestions if user has no conversations
-      if (conversationMap.size === 0) {
-        setShowSuggestions(true);
-      }
     } catch (error) {
       console.error('Error fetching conversations:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchSuggestedFriends = async () => {
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user?.id)
-        .single();
-
-      if (!profile) return;
-
-      // Get friends who have accepted friend requests
-      const { data: friendsData, error } = await supabase
-        .from('friends')
-        .select(`
-          friend_id,
-          friend:profiles!friends_friend_id_fkey(id, first_name, last_name, avatar_url, bio)
-        `)
-        .eq('user_id', profile.id)
-        .eq('status', 'accepted');
-
-      if (error) throw error;
-
-      const friends = friendsData?.map(item => item.friend).filter(Boolean) || [];
-      setSuggestedFriends(friends);
-    } catch (error) {
-      console.error('Error fetching suggested friends:', error);
     }
   };
 
@@ -269,7 +225,6 @@ const Messages = () => {
   const startChatbot = () => {
     setShowChatbot(true);
     setSelectedConversation(null);
-    setShowSuggestions(false);
     setMessages([]);
     
     // Initial bot greeting
@@ -285,24 +240,34 @@ const Messages = () => {
     setMessages([greeting]);
   };
 
-  const startConversationWithFriend = (friendId: string) => {
+  const startConversationWithFriend = async (friendId: string) => {
     setSelectedConversation(friendId);
     setShowChatbot(false);
-    setShowSuggestions(false);
     
-    // Add to conversations if not already there
-    const existingConv = conversations.find(conv => conv.user_id === friendId);
-    if (!existingConv) {
-      const friend = suggestedFriends.find(f => f.id === friendId);
-      if (friend) {
-        const newConversation: Conversation = {
-          user_id: friendId,
-          user_name: `${friend.first_name} ${friend.last_name}`,
-          avatar_url: friend.avatar_url,
-          unread_count: 0
-        };
-        setConversations(prev => [newConversation, ...prev]);
-      }
+    // Send initial message
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!profile) return;
+
+      const { error } = await supabase
+        .from('private_messages')
+        .insert({
+          sender_id: profile.id,
+          receiver_id: friendId,
+          content: "Hi! Let's start chatting!"
+        });
+
+      if (error) throw error;
+      
+      fetchMessages(friendId);
+      fetchConversations();
+    } catch (error) {
+      console.error('Error starting conversation:', error);
     }
   };
 
@@ -340,17 +305,12 @@ const Messages = () => {
         <CardContent className="p-0">
           <ScrollArea className="h-[500px]">
             {conversations.length === 0 ? (
-              <div className="text-center py-8">
-                <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">No conversations yet</p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setShowSuggestions(true)}
-                  className="mt-2"
-                >
-                  Find friends to chat with
-                </Button>
+              <div className="space-y-4 p-4">
+                <div className="text-center py-4">
+                  <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-muted-foreground text-sm">No conversations yet</p>
+                </div>
+                <FriendSuggestions onStartConversation={startConversationWithFriend} />
               </div>
             ) : (
               conversations.map((conversation) => (
@@ -362,7 +322,6 @@ const Messages = () => {
                     onClick={() => {
                       setSelectedConversation(conversation.user_id);
                       setShowChatbot(false);
-                      setShowSuggestions(false);
                     }}
                   >
                   <div className="flex items-center space-x-3">
@@ -460,73 +419,15 @@ const Messages = () => {
               </div>
             </CardContent>
           </>
-        ) : showSuggestions ? (
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Start a conversation</h3>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setShowSuggestions(false)}
-                >
-                  ✕
-                </Button>
-              </div>
-              
-              {suggestedFriends.length === 0 ? (
-                <div className="text-center py-8">
-                  <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No friends found</p>
-                  <p className="text-sm text-muted-foreground">Add friends to start messaging</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {suggestedFriends.map((friend) => (
-                    <div
-                      key={friend.id}
-                      className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => startConversationWithFriend(friend.id)}
-                    >
-                      <Avatar>
-                        <AvatarImage src={friend.avatar_url} />
-                        <AvatarFallback>
-                          {friend.first_name[0]}{friend.last_name[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium">
-                          {friend.first_name} {friend.last_name}
-                        </p>
-                        {friend.bio && (
-                          <p className="text-sm text-muted-foreground truncate">
-                            {friend.bio}
-                          </p>
-                        )}
-                      </div>
-                      <Button size="sm" variant="outline">
-                        Message
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </CardContent>
         ) : (
           <CardContent className="flex items-center justify-center h-full">
-            <div className="text-center">
+            <div className="text-center space-y-4">
               <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">Select a conversation</h3>
               <p className="text-muted-foreground">Choose a conversation from the list to start messaging</p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setShowSuggestions(true)}
-                className="mt-3"
-              >
-                Find friends to chat with
-              </Button>
+              <div className="mt-6">
+                <FriendSuggestions onStartConversation={startConversationWithFriend} />
+              </div>
             </div>
           </CardContent>
         )}

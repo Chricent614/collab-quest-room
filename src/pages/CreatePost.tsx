@@ -54,14 +54,12 @@ const CreatePost = () => {
     if (!file) return;
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
+      const fileName = `${user?.id}/${Date.now()}-${file.name}`;
+      const { data, error } = await supabase.storage
         .from('post-images')
         .upload(fileName, file);
 
-      if (uploadError) throw uploadError;
+      if (error) throw error;
 
       const { data: { publicUrl } } = supabase.storage
         .from('post-images')
@@ -71,7 +69,7 @@ const CreatePost = () => {
     } catch (error) {
       console.error('Error uploading image:', error);
       toast({
-        title: "Error",
+        title: "Error", 
         description: "Failed to upload image",
         variant: "destructive"
       });
@@ -83,14 +81,12 @@ const CreatePost = () => {
     if (!file) return;
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
+      const fileName = `${user?.id}/${Date.now()}-${file.name}`;
+      const { data, error } = await supabase.storage
         .from('post-videos')
         .upload(fileName, file);
 
-      if (uploadError) throw uploadError;
+      if (error) throw error;
 
       const { data: { publicUrl } } = supabase.storage
         .from('post-videos')
@@ -101,7 +97,7 @@ const CreatePost = () => {
       console.error('Error uploading video:', error);
       toast({
         title: "Error",
-        description: "Failed to upload video",
+        description: "Failed to upload video", 
         variant: "destructive"
       });
     }
