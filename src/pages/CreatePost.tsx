@@ -49,6 +49,64 @@ const CreatePost = () => {
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('post-images')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('post-images')
+        .getPublicUrl(fileName);
+
+      setFormData({ ...formData, image_url: publicUrl });
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload image",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('post-videos')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('post-videos')
+        .getPublicUrl(fileName);
+
+      setFormData({ ...formData, video_url: publicUrl });
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload video",
+        variant: "destructive"
+      });
+    }
+  };
+
   const createPost = async () => {
     if (!formData.content.trim()) {
       toast({
@@ -190,28 +248,46 @@ const CreatePost = () => {
           </div>
 
           {formData.content_type === 'image' && (
-            <div>
-              <Label htmlFor="image_url">Image URL</Label>
+            <div className="space-y-2">
+              <Label htmlFor="image_upload">Upload Image</Label>
               <Input
-                id="image_url"
-                value={formData.image_url}
-                onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                placeholder="https://example.com/image.jpg"
+                id="image_upload"
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
                 className="mt-2"
               />
+              {formData.image_url && (
+                <div className="mt-2">
+                  <img 
+                    src={formData.image_url} 
+                    alt="Preview" 
+                    className="max-w-xs rounded-lg border"
+                  />
+                </div>
+              )}
             </div>
           )}
 
           {formData.content_type === 'video' && (
-            <div>
-              <Label htmlFor="video_url">Video URL</Label>
+            <div className="space-y-2">
+              <Label htmlFor="video_upload">Upload Video</Label>
               <Input
-                id="video_url"
-                value={formData.video_url}
-                onChange={(e) => setFormData({ ...formData, video_url: e.target.value })}
-                placeholder="https://example.com/video.mp4"
+                id="video_upload"
+                type="file"
+                accept="video/*"
+                onChange={handleVideoUpload}
                 className="mt-2"
               />
+              {formData.video_url && (
+                <div className="mt-2">
+                  <video 
+                    src={formData.video_url} 
+                    controls 
+                    className="max-w-xs rounded-lg border"
+                  />
+                </div>
+              )}
             </div>
           )}
 

@@ -48,7 +48,8 @@ const PeerReview = () => {
   const [formData, setFormData] = useState({
     title: '',
     content: '',
-    group_id: ''
+    group_id: '',
+    file: null as File | null
   });
   const [reviewData, setReviewData] = useState({
     content: '',
@@ -140,11 +141,32 @@ const PeerReview = () => {
 
       if (!profile) throw new Error('Profile not found');
 
+      let fileUrl = null;
+      
+      // Upload file if provided
+      if (formData.file) {
+        const fileExt = formData.file.name.split('.').pop();
+        const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('group-files')
+          .upload(fileName, formData.file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('group-files')
+          .getPublicUrl(fileName);
+
+        fileUrl = publicUrl;
+      }
+
       const { error } = await supabase
         .from('peer_reviews')
         .insert({
           submission_title: formData.title,
           submission_content: formData.content,
+          submission_file_url: fileUrl,
           group_id: formData.group_id,
           submitted_by: profile.id
         });
@@ -156,7 +178,7 @@ const PeerReview = () => {
         description: "Submission uploaded for peer review!"
       });
 
-      setFormData({ title: '', content: '', group_id: '' });
+      setFormData({ title: '', content: '', group_id: '', file: null });
       setIsDialogOpen(false);
       fetchSubmissions();
       fetchMySubmissions();
@@ -300,6 +322,15 @@ const PeerReview = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label htmlFor="file">Attachment (optional)</Label>
+                <Input
+                  id="file"
+                  type="file"
+                  onChange={(e) => setFormData({ ...formData, file: e.target.files?.[0] || null })}
+                  className="mt-2"
+                />
               </div>
               <Button onClick={submitForReview} className="w-full">
                 Submit for Review
