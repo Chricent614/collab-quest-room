@@ -26,7 +26,7 @@ const CreatePost = () => {
   const [formData, setFormData] = useState({
     content: '',
     content_type: 'text',
-    group_id: '',
+    group_id: 'public',
     image_url: '',
     video_url: '',
     live_stream_url: ''
@@ -230,12 +230,12 @@ const CreatePost = () => {
 
           <div>
             <Label htmlFor="group">Share to Group (optional)</Label>
-            <Select value={formData.group_id} onValueChange={(value) => setFormData({ ...formData, group_id: value })}>
+            <Select value={formData.group_id} onValueChange={(value) => setFormData({ ...formData, group_id: value === 'public' ? '' : value })}>
               <SelectTrigger className="mt-2">
                 <SelectValue placeholder="Select a group or leave empty for public post" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Public Post</SelectItem>
+                <SelectItem value="public">Public Post</SelectItem>
                 {groups.map((group) => (
                   <SelectItem key={group.id} value={group.id}>
                     {group.name}
