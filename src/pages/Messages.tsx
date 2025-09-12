@@ -7,10 +7,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
-import { Send, MessageSquare, Users, Bot } from 'lucide-react';
+import { Send, MessageSquare, Users, Bot, ArrowLeft } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import VoiceChatbot from '@/components/VoiceChatbot';
 import FriendSuggestions from '@/components/FriendSuggestions';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Message {
   id: string;
@@ -42,6 +43,7 @@ interface Conversation {
 const Messages = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -282,156 +284,330 @@ const Messages = () => {
   }
 
   return (
-    <div className="h-[calc(100vh-12rem)] flex">
-      {/* Conversations List */}
-      <Card className="w-1/3 mr-4">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center">
-              <MessageSquare className="mr-2 h-5 w-5" />
-              Messages
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={startChatbot}
-              className="flex items-center gap-2"
-            >
-              <Bot className="h-4 w-4" />
-              AI Chat
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <ScrollArea className="h-[500px]">
-            {conversations.length === 0 ? (
-              <div className="space-y-4 p-4">
-                <div className="text-center py-4">
-                  <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-                  <p className="text-muted-foreground text-sm">No conversations yet</p>
-                </div>
-                <FriendSuggestions onStartConversation={startConversationWithFriend} />
-              </div>
-            ) : (
-              conversations.map((conversation) => (
-                  <div
-                    key={conversation.user_id}
-                    className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
-                      selectedConversation === conversation.user_id && !showChatbot ? 'bg-muted' : ''
-                    }`}
-                    onClick={() => {
-                      setSelectedConversation(conversation.user_id);
-                      setShowChatbot(false);
-                    }}
-                  >
-                  <div className="flex items-center space-x-3">
-                    <Avatar>
-                      <AvatarImage src={conversation.avatar_url} />
-                      <AvatarFallback>
-                        {conversation.user_name.split(' ').map(n => n[0]).join('')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{conversation.user_name}</p>
-                      {conversation.last_message && (
-                        <p className="text-sm text-muted-foreground truncate">
-                          {conversation.last_message}
-                        </p>
-                      )}
-                      {conversation.last_message_time && (
-                        <p className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: true })}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </ScrollArea>
-        </CardContent>
-      </Card>
-
-      {/* Chat Area */}
-      <Card className="flex-1">
-        {showChatbot ? (
-          <CardContent className="p-0 flex flex-col h-[500px]">
-            <VoiceChatbot
-              messages={messages}
-              setMessages={setMessages}
-              newMessage={newMessage}
-              setNewMessage={setNewMessage}
-            />
-          </CardContent>
-        ) : selectedConversation ? (
-          <>
-            <CardHeader className="border-b">
-              <CardTitle className="flex items-center">
-                <Avatar className="mr-3">
-                  <AvatarImage src={selectedConversationData?.avatar_url} />
-                  <AvatarFallback>
-                    {selectedConversationData?.user_name.split(' ').map(n => n[0]).join('')}
-                  </AvatarFallback>
-                </Avatar>
-                {selectedConversationData?.user_name}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 flex flex-col h-[500px]">
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4">
-                  {messages.map((message) => {
-                    const isFromMe = message.sender_id !== selectedConversation;
-                    
-                    return (
-                      <div
-                        key={message.id}
-                        className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}
+    <div className="h-[calc(100vh-12rem)]">
+      {isMobile ? (
+        /* Mobile Layout: Show conversations list or chat */
+        <div className="h-full">
+          {selectedConversation || showChatbot ? (
+            /* Show Chat Area on Mobile */
+            <Card className="h-full">
+              {showChatbot ? (
+                <>
+                  <CardHeader className="border-b">
+                    <CardTitle className="flex items-center">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setShowChatbot(false);
+                          setSelectedConversation(null);
+                        }}
+                        className="mr-2"
                       >
-                        <div
-                          className={`max-w-[70%] rounded-lg p-3 ${
-                            isFromMe
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted'
-                          }`}
-                        >
-                          <p className="text-sm">{message.content}</p>
-                          <p className={`text-xs mt-1 ${isFromMe ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                            {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
-                          </p>
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                      <Bot className="mr-2 h-5 w-5" />
+                      AI Assistant
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0 flex flex-col h-[calc(100%-5rem)]">
+                    <VoiceChatbot
+                      messages={messages}
+                      setMessages={setMessages}
+                      newMessage={newMessage}
+                      setNewMessage={setNewMessage}
+                    />
+                  </CardContent>
+                </>
+              ) : (
+                <>
+                  <CardHeader className="border-b">
+                    <CardTitle className="flex items-center">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setSelectedConversation(null)}
+                        className="mr-2"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                      <Avatar className="mr-3">
+                        <AvatarImage src={selectedConversationData?.avatar_url} />
+                        <AvatarFallback>
+                          {selectedConversationData?.user_name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      {selectedConversationData?.user_name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0 flex flex-col h-[calc(100%-5rem)]">
+                    <ScrollArea className="flex-1 p-4">
+                      <div className="space-y-4">
+                        {messages.map((message) => {
+                          const isFromMe = message.sender_id !== selectedConversation;
+                          
+                          return (
+                            <div
+                              key={message.id}
+                              className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div
+                                className={`max-w-[70%] rounded-lg p-3 ${
+                                  isFromMe
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-muted'
+                                }`}
+                              >
+                                <p className="text-sm">{message.content}</p>
+                                <p className={`text-xs mt-1 ${isFromMe ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                  {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                    <div className="border-t p-4">
+                      <div className="flex space-x-2">
+                        <Input
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder="Type a message..."
+                          onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                        />
+                        <Button onClick={sendMessage} size="icon">
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </>
+              )}
+            </Card>
+          ) : (
+            /* Show Conversations List on Mobile */
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <MessageSquare className="mr-2 h-5 w-5" />
+                    Messages
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={startChatbot}
+                    className="flex items-center gap-2"
+                  >
+                    <Bot className="h-4 w-4" />
+                    AI Chat
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="h-[calc(100vh-20rem)]">
+                  {conversations.length === 0 ? (
+                    <div className="space-y-4 p-4">
+                      <div className="text-center py-4">
+                        <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                        <p className="text-muted-foreground text-sm">No conversations yet</p>
+                      </div>
+                      <FriendSuggestions onStartConversation={startConversationWithFriend} />
+                    </div>
+                  ) : (
+                    conversations.map((conversation) => (
+                      <div
+                        key={conversation.user_id}
+                        className="p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => {
+                          setSelectedConversation(conversation.user_id);
+                          setShowChatbot(false);
+                        }}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <Avatar>
+                            <AvatarImage src={conversation.avatar_url} />
+                            <AvatarFallback>
+                              {conversation.user_name.split(' ').map(n => n[0]).join('')}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{conversation.user_name}</p>
+                            {conversation.last_message && (
+                              <p className="text-sm text-muted-foreground truncate">
+                                {conversation.last_message}
+                              </p>
+                            )}
+                            {conversation.last_message_time && (
+                              <p className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: true })}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    );
-                  })}
+                    ))
+                  )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      ) : (
+        /* Desktop Layout: Show both conversations and chat side by side */
+        <div className="flex h-full">
+          {/* Conversations List */}
+          <Card className="w-1/3 mr-4">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <MessageSquare className="mr-2 h-5 w-5" />
+                  Messages
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={startChatbot}
+                  className="flex items-center gap-2"
+                >
+                  <Bot className="h-4 w-4" />
+                  AI Chat
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ScrollArea className="h-[500px]">
+                {conversations.length === 0 ? (
+                  <div className="space-y-4 p-4">
+                    <div className="text-center py-4">
+                      <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                      <p className="text-muted-foreground text-sm">No conversations yet</p>
+                    </div>
+                    <FriendSuggestions onStartConversation={startConversationWithFriend} />
+                  </div>
+                ) : (
+                  conversations.map((conversation) => (
+                      <div
+                        key={conversation.user_id}
+                        className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
+                          selectedConversation === conversation.user_id && !showChatbot ? 'bg-muted' : ''
+                        }`}
+                        onClick={() => {
+                          setSelectedConversation(conversation.user_id);
+                          setShowChatbot(false);
+                        }}
+                      >
+                      <div className="flex items-center space-x-3">
+                        <Avatar>
+                          <AvatarImage src={conversation.avatar_url} />
+                          <AvatarFallback>
+                            {conversation.user_name.split(' ').map(n => n[0]).join('')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{conversation.user_name}</p>
+                          {conversation.last_message && (
+                            <p className="text-sm text-muted-foreground truncate">
+                              {conversation.last_message}
+                            </p>
+                          )}
+                          {conversation.last_message_time && (
+                            <p className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: true })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </ScrollArea>
-              <div className="border-t p-4">
-                <div className="flex space-x-2">
-                  <Input
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type a message..."
-                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                  />
-                  <Button onClick={sendMessage} size="icon">
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
             </CardContent>
-          </>
-        ) : (
-          <CardContent className="flex items-center justify-center h-full">
-            <div className="text-center space-y-4">
-              <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Select a conversation</h3>
-              <p className="text-muted-foreground">Choose a conversation from the list to start messaging</p>
-              <div className="mt-6">
-                <FriendSuggestions onStartConversation={startConversationWithFriend} />
-              </div>
-            </div>
-          </CardContent>
-        )}
-      </Card>
+          </Card>
+
+          {/* Chat Area */}
+          <Card className="flex-1">
+            {showChatbot ? (
+              <CardContent className="p-0 flex flex-col h-[500px]">
+                <VoiceChatbot
+                  messages={messages}
+                  setMessages={setMessages}
+                  newMessage={newMessage}
+                  setNewMessage={setNewMessage}
+                />
+              </CardContent>
+            ) : selectedConversation ? (
+              <>
+                <CardHeader className="border-b">
+                  <CardTitle className="flex items-center">
+                    <Avatar className="mr-3">
+                      <AvatarImage src={selectedConversationData?.avatar_url} />
+                      <AvatarFallback>
+                        {selectedConversationData?.user_name.split(' ').map(n => n[0]).join('')}
+                      </AvatarFallback>
+                    </Avatar>
+                    {selectedConversationData?.user_name}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 flex flex-col h-[500px]">
+                  <ScrollArea className="flex-1 p-4">
+                    <div className="space-y-4">
+                      {messages.map((message) => {
+                        const isFromMe = message.sender_id !== selectedConversation;
+                        
+                        return (
+                          <div
+                            key={message.id}
+                            className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}
+                          >
+                            <div
+                              className={`max-w-[70%] rounded-lg p-3 ${
+                                isFromMe
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted'
+                              }`}
+                            >
+                              <p className="text-sm">{message.content}</p>
+                              <p className={`text-xs mt-1 ${isFromMe ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                  <div className="border-t p-4">
+                    <div className="flex space-x-2">
+                      <Input
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Type a message..."
+                        onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                      />
+                      <Button onClick={sendMessage} size="icon">
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </>
+            ) : (
+              <CardContent className="flex items-center justify-center h-full">
+                <div className="text-center space-y-4">
+                  <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Select a conversation</h3>
+                  <p className="text-muted-foreground">Choose a conversation from the list to start messaging</p>
+                  <div className="mt-6">
+                    <FriendSuggestions onStartConversation={startConversationWithFriend} />
+                  </div>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
