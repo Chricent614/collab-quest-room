@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, Edit3, Save, X } from 'lucide-react';
+import { Loader2, Edit3, Save, X, Camera } from 'lucide-react';
 
 interface UserProfile {
   id: string;
@@ -30,6 +30,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [editedProfile, setEditedProfile] = useState<Partial<UserProfile>>({});
 
   useEffect(() => {
@@ -86,6 +87,76 @@ const Profile = () => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user?.id) return;
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "File size must be less than 5MB",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "Please upload an image file",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Create unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('profile-avatars')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-avatars')
+        .getPublicUrl(fileName);
+
+      // Update profile with new avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      setProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : null);
+      setEditedProfile(prev => ({ ...prev, avatar_url: publicUrl }));
+
+      toast({
+        title: "Success",
+        description: "Profile picture updated successfully!"
+      });
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload profile picture",
+        variant: "destructive"
+      });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -153,12 +224,34 @@ const Profile = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center space-x-4">
-            <Avatar className="h-20 w-20">
-              <AvatarImage src={profile.avatar_url} />
-              <AvatarFallback className="text-lg">
-                {profile.first_name?.charAt(0)}{profile.last_name?.charAt(0)}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={editing ? editedProfile.avatar_url || profile.avatar_url : profile.avatar_url} />
+                <AvatarFallback className="text-lg">
+                  {profile.first_name?.charAt(0)}{profile.last_name?.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+              {editing && (
+                <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center">
+                  <label htmlFor="avatar-upload" className="cursor-pointer">
+                    <Camera className="h-6 w-6 text-white" />
+                    <input
+                      id="avatar-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarUpload}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                  </label>
+                  {uploading && (
+                    <div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center">
+                      <Loader2 className="h-6 w-6 text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <div>
               <h2 className="text-2xl font-bold">
                 {profile.first_name} {profile.last_name}
@@ -166,6 +259,11 @@ const Profile = () => {
               <p className="text-muted-foreground">{profile.email}</p>
               {profile.school && (
                 <p className="text-sm text-muted-foreground">{profile.school}</p>
+              )}
+              {editing && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Click the camera icon to change your profile picture
+                </p>
               )}
             </div>
           </div>
