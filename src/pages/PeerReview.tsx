@@ -245,7 +245,7 @@ const PeerReview = () => {
           review_content: reviewData.content,
           rating: reviewData.rating,
           reviewed_by: profile.id,
-          status: 'completed'
+          status: 'reviewed'
         })
         .eq('id', reviewDialog.submission.id);
 
@@ -271,7 +271,7 @@ const PeerReview = () => {
   };
 
   const getStatusColor = (status: string) => {
-    return status === 'completed' 
+    return status === 'reviewed' 
       ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
       : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
   };
@@ -447,7 +447,7 @@ const PeerReview = () => {
                   
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>My submission</span>
-                    {submission.status === 'completed' && submission.rating && (
+                    {submission.status === 'reviewed' && submission.rating && (
                       <div className="flex items-center gap-2">
                         {renderStars(submission.rating)}
                         <span>({submission.rating}/5)</span>
@@ -455,7 +455,7 @@ const PeerReview = () => {
                     )}
                   </div>
 
-                  {submission.status === 'completed' && submission.review_content && (
+                  {submission.status === 'reviewed' && submission.review_content && (
                     <div className="border-t pt-3">
                       <p className="text-sm font-medium">Review:</p>
                       <p className="text-sm text-muted-foreground">{submission.review_content}</p>
