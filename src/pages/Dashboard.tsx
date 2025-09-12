@@ -137,23 +137,27 @@ const Dashboard = () => {
 
   const handleFileUpload = async (file: File) => {
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      if (!user?.id) throw new Error('Not authenticated');
 
-      const bucket = postType === 'photo' ? 'profile-avatars' : 'resources';
-      
+      const bucket = postType === 'photo' ? 'post-images'
+        : postType === 'video' ? 'post-videos'
+        : null;
+
+      if (!bucket) throw new Error('Unsupported post type for file upload');
+
+      const fileName = `${user.id}/${Date.now()}-${file.name}`;
+
       const { error: uploadError } = await supabase.storage
         .from(bucket)
-        .upload(filePath, file);
+        .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage
+      const { data: { publicUrl } } = supabase.storage
         .from(bucket)
-        .getPublicUrl(filePath);
+        .getPublicUrl(fileName);
 
-      setMediaUrl(data.publicUrl);
+      setMediaUrl(publicUrl);
     } catch (error) {
       console.error('Error uploading file:', error);
       toast({
