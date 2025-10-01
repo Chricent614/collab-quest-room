@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,11 +7,19 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
-import { Send, MessageSquare, Users, Bot, ArrowLeft } from 'lucide-react';
+import { Send, MessageSquare, Users, Bot, ArrowLeft, UserPlus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import VoiceChatbot from '@/components/VoiceChatbot';
 import FriendSuggestions from '@/components/FriendSuggestions';
 import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface Message {
   id: string;
@@ -50,6 +58,10 @@ const Messages = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [showChatbot, setShowChatbot] = useState(false);
+  const [longPressUser, setLongPressUser] = useState<Conversation | null>(null);
+  const [showChatRequestDialog, setShowChatRequestDialog] = useState(false);
+  const [isFriend, setIsFriend] = useState(false);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -73,7 +85,7 @@ const Messages = () => {
 
       if (!profile) return;
 
-      // Get all unique conversation partners
+      // Get all unique conversation partners (only verified emails)
       const { data: messageData, error } = await supabase
         .from('private_messages')
         .select(`
@@ -81,15 +93,15 @@ const Messages = () => {
           receiver_id,
           content,
           created_at,
-          sender:profiles!private_messages_sender_id_fkey(id, first_name, last_name, avatar_url),
-          receiver:profiles!private_messages_receiver_id_fkey(id, first_name, last_name, avatar_url)
+          sender:profiles!private_messages_sender_id_fkey(id, first_name, last_name, avatar_url, email_verified),
+          receiver:profiles!private_messages_receiver_id_fkey(id, first_name, last_name, avatar_url, email_verified)
         `)
         .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      // Process conversations
+      // Process conversations - filter for verified emails only
       const conversationMap = new Map<string, Conversation>();
       
       messageData?.forEach((message) => {
@@ -97,7 +109,8 @@ const Messages = () => {
         const otherUser = isFromMe ? message.receiver : message.sender;
         const otherUserId = isFromMe ? message.receiver_id : message.sender_id;
 
-        if (!conversationMap.has(otherUserId)) {
+        // Only show conversations with verified email users
+        if (otherUser.email_verified && !conversationMap.has(otherUserId)) {
           conversationMap.set(otherUserId, {
             user_id: otherUserId,
             user_name: `${otherUser.first_name} ${otherUser.last_name}`,
@@ -242,6 +255,93 @@ const Messages = () => {
     setMessages([greeting]);
   };
 
+  const handleLongPressStart = async (conversation: Conversation) => {
+    longPressTimer.current = setTimeout(async () => {
+      setLongPressUser(conversation);
+      
+      // Check if they're friends
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!profile) return;
+
+      const { data: friendship } = await supabase
+        .from('friends')
+        .select('*')
+        .or(`and(user_id.eq.${profile.id},friend_id.eq.${conversation.user_id}),and(user_id.eq.${conversation.user_id},friend_id.eq.${profile.id})`)
+        .eq('status', 'accepted')
+        .maybeSingle();
+
+      setIsFriend(!!friendship);
+      setShowChatRequestDialog(true);
+    }, 5000);
+  };
+
+  const handleLongPressEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const sendFriendRequest = async () => {
+    if (!longPressUser) return;
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!profile) return;
+
+      // Check if request already exists
+      const { data: existingRequest } = await supabase
+        .from('friends')
+        .select('*')
+        .or(`and(user_id.eq.${profile.id},friend_id.eq.${longPressUser.user_id}),and(user_id.eq.${longPressUser.user_id},friend_id.eq.${profile.id})`)
+        .maybeSingle();
+
+      if (existingRequest) {
+        toast({
+          title: "Already Connected",
+          description: "You already have a connection with this user",
+          variant: "destructive"
+        });
+        setShowChatRequestDialog(false);
+        return;
+      }
+
+      const { error } = await supabase
+        .from('friends')
+        .insert({
+          user_id: profile.id,
+          friend_id: longPressUser.user_id,
+          status: 'pending'
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Friend request sent successfully!"
+      });
+      
+      setShowChatRequestDialog(false);
+    } catch (error) {
+      console.error('Error sending friend request:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send friend request. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   const startConversationWithFriend = async (friendId: string) => {
     setSelectedConversation(friendId);
     setShowChatbot(false);
@@ -273,6 +373,14 @@ const Messages = () => {
     }
   };
 
+  const initiateChat = () => {
+    if (longPressUser) {
+      setSelectedConversation(longPressUser.user_id);
+      setShowChatbot(false);
+      setShowChatRequestDialog(false);
+    }
+  };
+
   const selectedConversationData = conversations.find(conv => conv.user_id === selectedConversation);
 
   if (loading) {
@@ -284,8 +392,44 @@ const Messages = () => {
   }
 
   return (
-    <div className="h-[calc(100vh-12rem)]">
-      {isMobile ? (
+    <>
+      <Dialog open={showChatRequestDialog} onOpenChange={setShowChatRequestDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chat with {longPressUser?.user_name}?</DialogTitle>
+            <DialogDescription>
+              {isFriend 
+                ? "You can start chatting with this friend." 
+                : "You're not friends yet. Would you like to send a friend request?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            {isFriend ? (
+              <>
+                <Button variant="outline" onClick={() => setShowChatRequestDialog(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={initiateChat}>
+                  Start Chat
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setShowChatRequestDialog(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={sendFriendRequest}>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Send Friend Request
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="h-[calc(100vh-12rem)]">
+        {isMobile ? (
         /* Mobile Layout: Show conversations list or chat */
         <div className="h-full">
           {selectedConversation || showChatbot ? (
@@ -424,6 +568,11 @@ const Messages = () => {
                           setSelectedConversation(conversation.user_id);
                           setShowChatbot(false);
                         }}
+                        onMouseDown={() => handleLongPressStart(conversation)}
+                        onMouseUp={handleLongPressEnd}
+                        onMouseLeave={handleLongPressEnd}
+                        onTouchStart={() => handleLongPressStart(conversation)}
+                        onTouchEnd={handleLongPressEnd}
                       >
                         <div className="flex items-center space-x-3">
                           <Avatar>
@@ -493,11 +642,16 @@ const Messages = () => {
                         className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
                           selectedConversation === conversation.user_id && !showChatbot ? 'bg-muted' : ''
                         }`}
-                        onClick={() => {
-                          setSelectedConversation(conversation.user_id);
-                          setShowChatbot(false);
-                        }}
-                      >
+                    onClick={() => {
+                      setSelectedConversation(conversation.user_id);
+                      setShowChatbot(false);
+                    }}
+                    onMouseDown={() => handleLongPressStart(conversation)}
+                    onMouseUp={handleLongPressEnd}
+                    onMouseLeave={handleLongPressEnd}
+                    onTouchStart={() => handleLongPressStart(conversation)}
+                    onTouchEnd={handleLongPressEnd}
+                  >
                       <div className="flex items-center space-x-3">
                         <Avatar>
                           <AvatarImage src={conversation.avatar_url} />
@@ -608,7 +762,8 @@ const Messages = () => {
           </Card>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

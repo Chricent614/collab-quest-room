@@ -52,10 +52,12 @@ const FriendSuggestions = ({ onStartConversation }: FriendSuggestionsProps) => {
         f.user_id === profile.id ? f.friend_id : f.user_id
       ) || [];
 
+      // Only show users with verified emails
       const { data: allProfiles, error } = await supabase
         .from('profiles')
         .select('id, first_name, last_name, avatar_url, school, bio')
         .not('id', 'in', `(${[profile.id, ...friendIds].join(',')})`)
+        .eq('email_verified', true)
         .limit(6);
 
       if (error) throw error;
@@ -77,6 +79,25 @@ const FriendSuggestions = ({ onStartConversation }: FriendSuggestionsProps) => {
 
       if (!profile) return;
 
+      // Check if request already exists (in either direction)
+      const { data: existingRequest } = await supabase
+        .from('friends')
+        .select('*')
+        .or(`and(user_id.eq.${profile.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${profile.id})`)
+        .maybeSingle();
+
+      if (existingRequest) {
+        toast({
+          title: "Already Connected",
+          description: existingRequest.status === 'pending' 
+            ? "Friend request already pending" 
+            : "You are already friends with this user",
+          variant: "destructive"
+        });
+        setSuggestions(prev => prev.filter(s => s.id !== friendId));
+        return;
+      }
+
       const { error } = await supabase
         .from('friends')
         .insert({
@@ -85,12 +106,23 @@ const FriendSuggestions = ({ onStartConversation }: FriendSuggestionsProps) => {
           status: 'pending'
         });
 
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Friend request sent!"
-      });
+      if (error) {
+        // Handle duplicate key error
+        if (error.code === '23505') {
+          toast({
+            title: "Already Sent",
+            description: "Friend request already sent to this user",
+            variant: "destructive"
+          });
+        } else {
+          throw error;
+        }
+      } else {
+        toast({
+          title: "Success",
+          description: "Friend request sent successfully!"
+        });
+      }
 
       // Remove from suggestions
       setSuggestions(prev => prev.filter(s => s.id !== friendId));
@@ -98,7 +130,7 @@ const FriendSuggestions = ({ onStartConversation }: FriendSuggestionsProps) => {
       console.error('Error sending friend request:', error);
       toast({
         title: "Error",
-        description: "Failed to send friend request",
+        description: "Failed to send friend request. Please try again.",
         variant: "destructive"
       });
     }

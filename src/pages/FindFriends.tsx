@@ -62,10 +62,12 @@ const FindFriends = () => {
 
   const fetchProfiles = async () => {
     try {
+      // Only show users with verified emails
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .neq('user_id', user?.id)
+        .eq('email_verified', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -102,6 +104,25 @@ const FindFriends = () => {
     if (!myProfile) return;
 
     try {
+      // Check if request already exists (in either direction)
+      const { data: existingRequest } = await supabase
+        .from('friends')
+        .select('*')
+        .or(`and(user_id.eq.${myProfile.id},friend_id.eq.${profileId}),and(user_id.eq.${profileId},friend_id.eq.${myProfile.id})`)
+        .maybeSingle();
+
+      if (existingRequest) {
+        toast({
+          title: "Already Connected",
+          description: existingRequest.status === 'pending' 
+            ? "Friend request already pending" 
+            : "You are already friends with this user",
+          variant: "destructive"
+        });
+        fetchFriends();
+        return;
+      }
+
       const { error } = await supabase
         .from('friends')
         .insert({
@@ -110,19 +131,30 @@ const FindFriends = () => {
           status: 'pending'
         });
 
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Friend request sent!"
-      });
+      if (error) {
+        // Handle duplicate key error
+        if (error.code === '23505') {
+          toast({
+            title: "Already Sent",
+            description: "Friend request already sent to this user",
+            variant: "destructive"
+          });
+        } else {
+          throw error;
+        }
+      } else {
+        toast({
+          title: "Success",
+          description: "Friend request sent successfully!"
+        });
+      }
 
       fetchFriends();
     } catch (error) {
       console.error('Error sending friend request:', error);
       toast({
         title: "Error",
-        description: "Failed to send friend request",
+        description: "Failed to send friend request. Please try again.",
         variant: "destructive"
       });
     }
