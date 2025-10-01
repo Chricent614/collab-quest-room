@@ -69,6 +69,74 @@ const Messages = () => {
     }
   }, [user]);
 
+  // Real-time subscription for friend updates
+  useEffect(() => {
+    if (!user) return;
+
+    let myProfileId: string | null = null;
+
+    const setupRealtime = async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) return;
+      myProfileId = profile.id;
+
+      const channel = supabase
+        .channel('friends-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'friends',
+            filter: `friend_id=eq.${myProfileId}`
+          },
+          (payload) => {
+            // When someone accepts our friend request
+            if (payload.new.status === 'accepted') {
+              fetchConversations();
+              toast({
+                title: "Friend Request Accepted",
+                description: "You can now start chatting!",
+              });
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'friends',
+            filter: `user_id=eq.${myProfileId}`
+          },
+          (payload) => {
+            // When we accept a friend request
+            if (payload.new.status === 'accepted') {
+              fetchConversations();
+            }
+          }
+        )
+        .subscribe();
+
+      return channel;
+    };
+
+    const channelPromise = setupRealtime();
+
+    return () => {
+      channelPromise.then(channel => {
+        if (channel) {
+          supabase.removeChannel(channel);
+        }
+      });
+    };
+  }, [user]);
+
   useEffect(() => {
     if (selectedConversation) {
       fetchMessages(selectedConversation);
