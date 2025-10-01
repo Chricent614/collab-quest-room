@@ -548,6 +548,10 @@ export type Database = {
         Args: { group_uuid: string }
         Returns: boolean
       }
+      sync_profile_email_verified: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
