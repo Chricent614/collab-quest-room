@@ -203,12 +203,39 @@ const FindFriends = () => {
         description: "Friend request accepted!"
       });
 
+      // Refresh all data
       fetchFriends();
+      fetchProfiles();
     } catch (error) {
       console.error('Error accepting friend request:', error);
       toast({
         title: "Error",
         description: "Failed to accept friend request",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const declineFriendRequest = async (friendshipId: string) => {
+    try {
+      const { error } = await supabase
+        .from('friends')
+        .delete()
+        .eq('id', friendshipId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Declined",
+        description: "Friend request declined"
+      });
+
+      fetchFriends();
+    } catch (error) {
+      console.error('Error declining friend request:', error);
+      toast({
+        title: "Error",
+        description: "Failed to decline friend request",
         variant: "destructive"
       });
     }
@@ -313,6 +340,7 @@ const FindFriends = () => {
                           size="sm"
                           variant="outline"
                           className="flex-1"
+                          onClick={() => declineFriendRequest(request.id)}
                         >
                           Decline
                         </Button>
