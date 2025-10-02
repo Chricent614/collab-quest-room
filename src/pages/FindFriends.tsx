@@ -40,10 +40,15 @@ const FindFriends = () => {
   useEffect(() => {
     if (user) {
       fetchMyProfile();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (myProfile) {
       fetchProfiles();
       fetchFriends();
     }
-  }, [user]);
+  }, [myProfile]);
 
   const fetchMyProfile = async () => {
     try {
@@ -62,7 +67,10 @@ const FindFriends = () => {
 
   const fetchProfiles = async () => {
     try {
-      if (!myProfile) return;
+      if (!myProfile) {
+        setLoading(false);
+        return;
+      }
 
       // Get list of users who are already accepted friends
       const { data: acceptedFriends } = await supabase
