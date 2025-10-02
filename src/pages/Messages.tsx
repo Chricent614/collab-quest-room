@@ -169,9 +169,22 @@ const Messages = () => {
 
       if (error) throw error;
 
+      // Get all accepted friends
+      const { data: friendsData } = await supabase
+        .from('friends')
+        .select(`
+          user_id,
+          friend_id,
+          user:profiles!friends_user_id_fkey(id, first_name, last_name, avatar_url, email_verified),
+          friend:profiles!friends_friend_id_fkey(id, first_name, last_name, avatar_url, email_verified)
+        `)
+        .or(`user_id.eq.${profile.id},friend_id.eq.${profile.id}`)
+        .eq('status', 'accepted');
+
       // Process conversations - filter for verified emails only
       const conversationMap = new Map<string, Conversation>();
       
+      // Add message-based conversations
       messageData?.forEach((message) => {
         const isFromMe = message.sender_id === profile.id;
         const otherUser = isFromMe ? message.receiver : message.sender;
@@ -185,6 +198,25 @@ const Messages = () => {
             avatar_url: otherUser.avatar_url,
             last_message: message.content,
             last_message_time: message.created_at,
+            unread_count: 0
+          });
+        }
+      });
+
+      // Add accepted friends even if no messages yet
+      friendsData?.forEach((friendship) => {
+        const isFromMe = friendship.user_id === profile.id;
+        const otherUser = isFromMe ? friendship.friend : friendship.user;
+        const otherUserId = isFromMe ? friendship.friend_id : friendship.user_id;
+
+        // Only show verified email users and don't overwrite existing conversations
+        if (otherUser.email_verified && !conversationMap.has(otherUserId)) {
+          conversationMap.set(otherUserId, {
+            user_id: otherUserId,
+            user_name: `${otherUser.first_name} ${otherUser.last_name}`,
+            avatar_url: otherUser.avatar_url,
+            last_message: undefined,
+            last_message_time: undefined,
             unread_count: 0
           });
         }

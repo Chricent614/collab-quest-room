@@ -62,13 +62,34 @@ const FindFriends = () => {
 
   const fetchProfiles = async () => {
     try {
-      // Only show users with verified emails
-      const { data, error } = await supabase
+      if (!myProfile) return;
+
+      // Get list of users who are already accepted friends
+      const { data: acceptedFriends } = await supabase
+        .from('friends')
+        .select('user_id, friend_id')
+        .or(`user_id.eq.${myProfile.id},friend_id.eq.${myProfile.id}`)
+        .eq('status', 'accepted');
+
+      // Create array of friend profile IDs to exclude
+      const friendProfileIds = acceptedFriends?.map(f => 
+        f.user_id === myProfile.id ? f.friend_id : f.user_id
+      ) || [];
+
+      // Build query to exclude current user and accepted friends
+      let query = supabase
         .from('profiles')
         .select('*')
         .neq('user_id', user?.id)
         .eq('email_verified', true)
         .order('created_at', { ascending: false });
+
+      // Exclude accepted friends
+      if (friendProfileIds.length > 0) {
+        query = query.not('id', 'in', `(${friendProfileIds.join(',')})`);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setProfiles(data || []);
