@@ -7,9 +7,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
-import { Send, MessageSquare, Users, Bot, ArrowLeft, UserPlus } from 'lucide-react';
+import { Send, MessageSquare, Users, Bot, ArrowLeft, UserPlus, Check, CheckCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import VoiceChatbot from '@/components/VoiceChatbot';
+import GroupMessages from '@/components/GroupMessages';
 import FriendSuggestions from '@/components/FriendSuggestions';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
@@ -40,12 +41,14 @@ interface Message {
 }
 
 interface Conversation {
-  user_id: string;
+  user_id?: string;
+  group_id?: string;
   user_name: string;
   avatar_url?: string;
   last_message?: string;
   last_message_time?: string;
   unread_count: number;
+  is_group?: boolean;
 }
 
 const Messages = () => {
@@ -54,6 +57,7 @@ const Messages = () => {
   const isMobile = useIsMobile();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -61,13 +65,25 @@ const Messages = () => {
   const [longPressUser, setLongPressUser] = useState<Conversation | null>(null);
   const [showChatRequestDialog, setShowChatRequestDialog] = useState(false);
   const [isFriend, setIsFriend] = useState(false);
+  const [myProfile, setMyProfile] = useState<any>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (user) {
+      fetchMyProfile();
       fetchConversations();
     }
   }, [user]);
+
+  const fetchMyProfile = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+    setMyProfile(data);
+  };
 
   // Real-time subscription for friend updates
   useEffect(() => {
@@ -240,6 +256,24 @@ const Messages = () => {
         .or(`user_id.eq.${profile.id},friend_id.eq.${profile.id}`)
         .eq('status', 'accepted');
 
+      // Get user's groups
+      const { data: groupsData } = await supabase
+        .from('group_members')
+        .select(`
+          group_id,
+          groups!inner(id, name, avatar_url)
+        `)
+        .eq('user_id', profile.id);
+
+      // Get last messages for each group
+      const groupIds = groupsData?.map(g => g.group_id) || [];
+      const { data: groupMessages } = groupIds.length > 0 ? await supabase
+        .from('posts')
+        .select('id, content, created_at, group_id, author_id')
+        .in('group_id', groupIds)
+        .eq('content_type', 'text')
+        .order('created_at', { ascending: false }) : { data: [] };
+
       // Process conversations - filter for verified emails only
       const conversationMap = new Map<string, Conversation>();
       
@@ -257,7 +291,8 @@ const Messages = () => {
             avatar_url: otherUser.avatar_url,
             last_message: message.content,
             last_message_time: message.created_at,
-            unread_count: 0
+            unread_count: 0,
+            is_group: false
           });
         }
       });
@@ -276,9 +311,27 @@ const Messages = () => {
             avatar_url: otherUser.avatar_url,
             last_message: undefined,
             last_message_time: undefined,
-            unread_count: 0
+            unread_count: 0,
+            is_group: false
           });
         }
+      });
+
+      // Add group conversations
+      groupsData?.forEach((groupMember) => {
+        const group = groupMember.groups;
+        const groupId = `group-${group.id}`;
+        const lastGroupMessage = groupMessages?.find(m => m.group_id === group.id);
+
+        conversationMap.set(groupId, {
+          group_id: group.id,
+          user_name: group.name,
+          avatar_url: group.avatar_url,
+          last_message: lastGroupMessage?.content,
+          last_message_time: lastGroupMessage?.created_at,
+          unread_count: 0,
+          is_group: true
+        });
       });
 
       setConversations(Array.from(conversationMap.values()));
@@ -591,7 +644,7 @@ const Messages = () => {
         {isMobile ? (
         /* Mobile Layout: Show conversations list or chat */
         <div className="h-full">
-          {selectedConversation || showChatbot ? (
+          {selectedConversation || selectedGroupId || showChatbot ? (
             /* Show Chat Area on Mobile */
             <Card className="h-full">
               {showChatbot ? (
@@ -622,6 +675,12 @@ const Messages = () => {
                     />
                   </CardContent>
                 </>
+              ) : selectedGroupId ? (
+                /* Show Group Chat */
+                <GroupMessages 
+                  groupId={selectedGroupId} 
+                  groupName={conversations.find(c => c.group_id === selectedGroupId)?.user_name || 'Group'} 
+                />
               ) : (
                 <>
                   <CardHeader className="border-b">
@@ -662,9 +721,14 @@ const Messages = () => {
                                 }`}
                               >
                                 <p className="text-sm">{message.content}</p>
-                                <p className={`text-xs mt-1 ${isFromMe ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                                  {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
-                                </p>
+                                <div className="flex items-center gap-1 mt-1">
+                                  <p className={`text-xs ${isFromMe ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                    {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
+                                  </p>
+                                  {isFromMe && (
+                                    <CheckCheck className="h-3 w-3 text-primary-foreground/70 ml-1" />
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
@@ -721,10 +785,16 @@ const Messages = () => {
                   ) : (
                     conversations.map((conversation) => (
                       <div
-                        key={conversation.user_id}
-                        className="p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors"
+                        key={conversation.user_id || conversation.group_id}
+                        className="p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors relative"
                         onClick={() => {
-                          setSelectedConversation(conversation.user_id);
+                          if (conversation.is_group) {
+                            setSelectedGroupId(conversation.group_id!);
+                            setSelectedConversation(null);
+                          } else {
+                            setSelectedConversation(conversation.user_id!);
+                            setSelectedGroupId(null);
+                          }
                           setShowChatbot(false);
                         }}
                         onMouseDown={() => handleLongPressStart(conversation)}
@@ -734,14 +804,32 @@ const Messages = () => {
                         onTouchEnd={handleLongPressEnd}
                       >
                         <div className="flex items-center space-x-3">
-                          <Avatar>
-                            <AvatarImage src={conversation.avatar_url} />
-                            <AvatarFallback>
-                              {conversation.user_name.split(' ').map(n => n[0]).join('')}
-                            </AvatarFallback>
-                          </Avatar>
+                          <div className="relative">
+                            <Avatar>
+                              <AvatarImage src={conversation.avatar_url} />
+                              <AvatarFallback>
+                                {conversation.is_group ? (
+                                  <Users className="h-4 w-4" />
+                                ) : (
+                                  conversation.user_name.split(' ').map(n => n[0]).join('')
+                                )}
+                              </AvatarFallback>
+                            </Avatar>
+                            {conversation.unread_count > 0 && (
+                              <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold">
+                                {conversation.unread_count}
+                              </div>
+                            )}
+                          </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{conversation.user_name}</p>
+                            <div className="flex items-center justify-between">
+                              <p className="font-medium truncate">{conversation.user_name}</p>
+                              {conversation.last_message_time && (
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: false })}
+                                </span>
+                              )}
+                            </div>
                             {conversation.last_message && (
                               <p className="text-sm text-muted-foreground truncate">
                                 {conversation.last_message}
