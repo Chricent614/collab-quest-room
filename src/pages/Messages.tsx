@@ -137,11 +137,70 @@ const Messages = () => {
     };
   }, [user]);
 
+  // Real-time subscription for new messages
   useEffect(() => {
-    if (selectedConversation) {
-      fetchMessages(selectedConversation);
-    }
-  }, [selectedConversation]);
+    if (!user || !selectedConversation) return;
+
+    let myProfileId: string | null = null;
+
+    const setupMessageRealtime = async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) return;
+      myProfileId = profile.id;
+
+      const channel = supabase
+        .channel('private-messages')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'private_messages',
+            filter: `receiver_id=eq.${myProfileId}`
+          },
+          (payload) => {
+            // If the message is for the current conversation, add it
+            if (payload.new.sender_id === selectedConversation) {
+              fetchMessages(selectedConversation);
+            }
+            // Update conversations list
+            fetchConversations();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'private_messages',
+            filter: `sender_id=eq.${myProfileId}`
+          },
+          (payload) => {
+            // Update conversations list when we send a message
+            fetchConversations();
+          }
+        )
+        .subscribe();
+
+      return channel;
+    };
+
+    fetchMessages(selectedConversation);
+    const channelPromise = setupMessageRealtime();
+
+    return () => {
+      channelPromise.then(channel => {
+        if (channel) {
+          supabase.removeChannel(channel);
+        }
+      });
+    };
+  }, [user, selectedConversation]);
 
   const fetchConversations = async () => {
     try {
@@ -528,7 +587,7 @@ const Messages = () => {
         </DialogContent>
       </Dialog>
 
-      <div className="h-[calc(100vh-12rem)]">
+      <div className="fixed inset-0 top-16 z-10">
         {isMobile ? (
         /* Mobile Layout: Show conversations list or chat */
         <div className="h-full">
@@ -584,7 +643,7 @@ const Messages = () => {
                       {selectedConversationData?.user_name}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-0 flex flex-col h-[calc(100%-5rem)]">
+                   <CardContent className="p-0 flex flex-col h-[calc(100vh-14rem)]">
                     <ScrollArea className="flex-1 p-4">
                       <div className="space-y-4">
                         {messages.map((message) => {
@@ -649,8 +708,8 @@ const Messages = () => {
                   </Button>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea className="h-[calc(100vh-20rem)]">
+               <CardContent className="p-0">
+                <ScrollArea className="h-[calc(100vh-12rem)]">
                   {conversations.length === 0 ? (
                     <div className="space-y-4 p-4">
                       <div className="text-center py-4">
@@ -705,9 +764,9 @@ const Messages = () => {
         </div>
       ) : (
         /* Desktop Layout: Show both conversations and chat side by side */
-        <div className="flex h-full">
+        <div className="flex h-full gap-4">
           {/* Conversations List */}
-          <Card className="w-1/3 mr-4">
+          <Card className="w-1/3">
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center">
@@ -726,7 +785,7 @@ const Messages = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <ScrollArea className="h-[500px]">
+              <ScrollArea className="h-[calc(100vh-14rem)]">
                 {conversations.length === 0 ? (
                   <div className="space-y-4 p-4">
                     <div className="text-center py-4">
@@ -783,7 +842,7 @@ const Messages = () => {
           {/* Chat Area */}
           <Card className="flex-1">
             {showChatbot ? (
-              <CardContent className="p-0 flex flex-col h-[500px]">
+              <CardContent className="p-0 flex flex-col h-[calc(100vh-8rem)]">
                 <VoiceChatbot
                   messages={messages}
                   setMessages={setMessages}
@@ -804,7 +863,7 @@ const Messages = () => {
                     {selectedConversationData?.user_name}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-0 flex flex-col h-[500px]">
+                <CardContent className="p-0 flex flex-col h-[calc(100vh-14rem)]">
                   <ScrollArea className="flex-1 p-4">
                     <div className="space-y-4">
                       {messages.map((message) => {
