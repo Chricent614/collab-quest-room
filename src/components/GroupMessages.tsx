@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle } from 'lucide-react';
+import { Send, MessageCircle, Check, CheckCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
@@ -20,6 +20,8 @@ interface Message {
     last_name: string;
     avatar_url: string;
   };
+  read_count?: number;
+  is_delivered?: boolean;
 }
 
 interface GroupMessagesProps {
@@ -40,7 +42,8 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
     if (user && groupId) {
       fetchMyProfile();
       fetchMessages();
-      setupRealtimeSubscription();
+      const cleanup = setupRealtimeSubscription();
+      return cleanup;
     }
   }, [user, groupId]);
 
@@ -69,7 +72,7 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
 
   const fetchMessages = async () => {
     try {
-      // Create a temporary messages table for group chat
+      // Fetch messages with read counts
       const { data, error } = await supabase
         .from('posts')
         .select(`
@@ -84,6 +87,18 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
+
+      // Fetch read counts for all messages
+      const messageIds = (data || []).map(post => post.id);
+      const { data: readData } = await supabase
+        .from('message_reads')
+        .select('message_id, user_id')
+        .in('message_id', messageIds);
+
+      const readCounts = readData?.reduce((acc, read) => {
+        acc[read.message_id] = (acc[read.message_id] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>) || {};
       
       const formattedMessages = (data || []).map(post => ({
         id: post.id,
@@ -94,10 +109,17 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
           first_name: post.profiles.first_name,
           last_name: post.profiles.last_name,
           avatar_url: post.profiles.avatar_url
-        } : undefined
+        } : undefined,
+        read_count: readCounts[post.id] || 0,
+        is_delivered: true // Messages are delivered once in DB
       }));
 
       setMessages(formattedMessages);
+      
+      // Mark messages as read
+      if (myProfile && messageIds.length > 0) {
+        markMessagesAsRead(messageIds);
+      }
     } catch (error) {
       console.error('Error fetching messages:', error);
       toast({
@@ -107,6 +129,24 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const markMessagesAsRead = async (messageIds: string[]) => {
+    if (!myProfile) return;
+
+    try {
+      // Mark all messages as read (ignore duplicates)
+      const reads = messageIds.map(messageId => ({
+        message_id: messageId,
+        user_id: myProfile.id
+      }));
+
+      await supabase
+        .from('message_reads')
+        .upsert(reads, { onConflict: 'message_id,user_id', ignoreDuplicates: true });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
     }
   };
 
@@ -124,9 +164,20 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
         (payload) => {
           const newPost = payload.new;
           if (newPost.content_type === 'text') {
-            // Add the new message to the list
-            fetchMessages(); // Refetch to get profile data
+            fetchMessages(); // Refetch to get profile data and read counts
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'message_reads'
+        },
+        () => {
+          // Update read counts when someone reads a message
+          fetchMessages();
         }
       )
       .subscribe();
@@ -225,9 +276,20 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
                       <p className="text-sm">{message.content}</p>
                     </div>
                     
-                    <span className="text-xs text-muted-foreground mt-1">
-                      {format(new Date(message.created_at), 'HH:mm')}
-                    </span>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(message.created_at), 'HH:mm')}
+                      </span>
+                      {isMyMessage && (
+                        <span className={`ml-1 ${(message.read_count || 0) > 0 ? 'text-blue-500' : 'text-muted-foreground'}`}>
+                          {message.is_delivered ? (
+                            <CheckCheck className="h-3 w-3" />
+                          ) : (
+                            <Check className="h-3 w-3" />
+                          )}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   
                   {isMyMessage && (
