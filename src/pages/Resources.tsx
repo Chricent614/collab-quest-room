@@ -408,7 +408,31 @@ const Resources = () => {
               </div>
 
               <Button
-                onClick={() => window.open(resource.file_url, '_blank')}
+                onClick={async () => {
+                  try {
+                    const response = await fetch(resource.file_url);
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = resource.title || 'download';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    toast({
+                      title: "Success",
+                      description: "File downloaded successfully!"
+                    });
+                  } catch (error) {
+                    console.error('Download error:', error);
+                    toast({
+                      title: "Error",
+                      description: "Failed to download file",
+                      variant: "destructive"
+                    });
+                  }
+                }}
                 className="w-full"
                 size="sm"
               >
