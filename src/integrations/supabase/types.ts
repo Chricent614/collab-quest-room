@@ -518,31 +518,46 @@ export type Database = {
       }
       user_settings: {
         Row: {
+          comment_notifications: boolean | null
           created_at: string | null
+          group_notifications: boolean | null
           id: string
+          like_notifications: boolean | null
+          message_notifications: boolean | null
           notifications_enabled: boolean | null
           privacy_level: string | null
           theme: string | null
           updated_at: string | null
           user_id: string
+          wallpaper_url: string | null
         }
         Insert: {
+          comment_notifications?: boolean | null
           created_at?: string | null
+          group_notifications?: boolean | null
           id?: string
+          like_notifications?: boolean | null
+          message_notifications?: boolean | null
           notifications_enabled?: boolean | null
           privacy_level?: string | null
           theme?: string | null
           updated_at?: string | null
           user_id: string
+          wallpaper_url?: string | null
         }
         Update: {
+          comment_notifications?: boolean | null
           created_at?: string | null
+          group_notifications?: boolean | null
           id?: string
+          like_notifications?: boolean | null
+          message_notifications?: boolean | null
           notifications_enabled?: boolean | null
           privacy_level?: string | null
           theme?: string | null
           updated_at?: string | null
           user_id?: string
+          wallpaper_url?: string | null
         }
         Relationships: [
           {
@@ -565,22 +580,10 @@ export type Database = {
           group_id: string
         }[]
       }
-      get_user_profile_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      is_admin_of_group: {
-        Args: { group_uuid: string }
-        Returns: boolean
-      }
-      is_member_of_group: {
-        Args: { group_uuid: string }
-        Returns: boolean
-      }
-      sync_profile_email_verified: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      get_user_profile_id: { Args: never; Returns: string }
+      is_admin_of_group: { Args: { group_uuid: string }; Returns: boolean }
+      is_member_of_group: { Args: { group_uuid: string }; Returns: boolean }
+      sync_profile_email_verified: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
