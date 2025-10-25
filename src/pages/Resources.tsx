@@ -410,42 +410,65 @@ const Resources = () => {
               <Button
                 onClick={async () => {
                   try {
-                    // Extract file path from the public URL
-                    const urlPath = new URL(resource.file_url).pathname;
-                    const filePath = urlPath.split('/storage/v1/object/public/resources/')[1];
-                    
-                    // Download using Supabase storage download method
+                    // Parse bucket and file path from Supabase public URL
+                    const { pathname } = new URL(resource.file_url);
+                    const match = pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
+
+                    if (!match) {
+                      throw new Error('Invalid storage URL format');
+                    }
+
+                    const [, bucket, filePath] = match;
+
+                    // Download via Supabase Storage API (preserves binary integrity)
                     const { data, error } = await supabase.storage
-                      .from('resources')
+                      .from(bucket)
                       .download(filePath);
 
-                    if (error) throw error;
+                    if (error || !data) throw error || new Error('No data returned');
 
-                    // Get file extension from file_type or URL
-                    const extension = resource.file_type.split('/')[1] || 
-                                     filePath.split('.').pop() || 
-                                     'file';
-                    
-                    // Create download link
+                    // Determine a good filename
+                    const fileNameFromPath = filePath.split('/').pop() || 'downloaded-file';
+                    const safeTitle = (resource.title || 'download').replace(/[^a-z0-9-_ ]/gi, '_');
+                    const extFromPath = fileNameFromPath.includes('.') ? fileNameFromPath.split('.').pop() : undefined;
+                    const extFromType = resource.file_type?.includes('/') ? resource.file_type.split('/')[1] : undefined;
+                    const extension = extFromPath || extFromType || 'file';
+                    const finalFileName = safeTitle.endsWith(`.${extension}`)
+                      ? safeTitle
+                      : `${safeTitle}.${extension}`;
+
+                    // Trigger download
                     const url = window.URL.createObjectURL(data);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `${resource.title}.${extension}`;
+                    a.download = finalFileName;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
                     document.body.removeChild(a);
-                    
+
                     toast({
-                      title: "Success",
-                      description: "File downloaded successfully!"
+                      title: 'Success',
+                      description: 'File downloaded successfully!'
                     });
                   } catch (error) {
                     console.error('Download error:', error);
+
+                    // Fallback: try direct URL download (works for public buckets)
+                    try {
+                      const a = document.createElement('a');
+                      a.href = resource.file_url;
+                      a.target = '_blank';
+                      a.rel = 'noopener noreferrer';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                    } catch {}
+
                     toast({
-                      title: "Error",
-                      description: "Failed to download file. Please try again.",
-                      variant: "destructive"
+                      title: 'Error',
+                      description: 'Failed to download file. Please try again.',
+                      variant: 'destructive'
                     });
                   }
                 }}
