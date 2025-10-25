@@ -410,16 +410,32 @@ const Resources = () => {
               <Button
                 onClick={async () => {
                   try {
-                    const response = await fetch(resource.file_url);
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
+                    // Extract file path from the public URL
+                    const urlPath = new URL(resource.file_url).pathname;
+                    const filePath = urlPath.split('/storage/v1/object/public/resources/')[1];
+                    
+                    // Download using Supabase storage download method
+                    const { data, error } = await supabase.storage
+                      .from('resources')
+                      .download(filePath);
+
+                    if (error) throw error;
+
+                    // Get file extension from file_type or URL
+                    const extension = resource.file_type.split('/')[1] || 
+                                     filePath.split('.').pop() || 
+                                     'file';
+                    
+                    // Create download link
+                    const url = window.URL.createObjectURL(data);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = resource.title || 'download';
+                    a.download = `${resource.title}.${extension}`;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
                     document.body.removeChild(a);
+                    
                     toast({
                       title: "Success",
                       description: "File downloaded successfully!"
@@ -428,7 +444,7 @@ const Resources = () => {
                     console.error('Download error:', error);
                     toast({
                       title: "Error",
-                      description: "Failed to download file",
+                      description: "Failed to download file. Please try again.",
                       variant: "destructive"
                     });
                   }
