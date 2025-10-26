@@ -410,22 +410,60 @@ const Resources = () => {
               <Button
                 onClick={async () => {
                   try {
-                    // Parse bucket and file path from Supabase public URL
-                    const { pathname } = new URL(resource.file_url);
-                    const match = pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
+                    // Parse bucket and file path from Supabase Storage URL (handles public/sign/authenticated)
+                    const urlObj = new URL(resource.file_url);
+                    const pathname = urlObj.pathname;
 
-                    if (!match) {
-                      throw new Error('Invalid storage URL format');
+                    const matchAny = pathname.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)/);
+
+                    let bucket: string | null = null;
+                    let filePath: string | null = null;
+
+                    if (matchAny) {
+                      bucket = matchAny[1];
+                      filePath = matchAny[2];
+                    } else {
+                      // Generic fallback matcher
+                      const generic = pathname.match(/\/storage\/v1\/object\/([^/]+)\/([^/]+)\/(.+)/);
+                      if (generic) {
+                        bucket = generic[2];
+                        filePath = generic[3];
+                      }
                     }
 
-                    const [, bucket, filePath] = match;
+                    if (!bucket || !filePath) {
+                      throw new Error('Could not parse storage path from URL');
+                    }
 
-                    // Download via Supabase Storage API (preserves binary integrity)
+                    // Attempt direct download via Storage API
                     const { data, error } = await supabase.storage
                       .from(bucket)
                       .download(filePath);
 
-                    if (error || !data) throw error || new Error('No data returned');
+                    if (!data || error) {
+                      // As a fallback for private buckets or RLS-denied downloads, try a short-lived signed URL
+                      const { data: signed, error: signError } = await supabase.storage
+                        .from(bucket)
+                        .createSignedUrl(filePath, 60);
+
+                      if (signed?.signedUrl) {
+                        const a = document.createElement('a');
+                        a.href = signed.signedUrl;
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+
+                        toast({
+                          title: 'Opened',
+                          description: 'Opened a secure download link in a new tab.'
+                        });
+                        return;
+                      }
+
+                      throw error || signError || new Error('Download failed');
+                    }
 
                     // Determine a good filename
                     const fileNameFromPath = filePath.split('/').pop() || 'downloaded-file';
@@ -437,7 +475,7 @@ const Resources = () => {
                       ? safeTitle
                       : `${safeTitle}.${extension}`;
 
-                    // Trigger download
+                    // Trigger browser download
                     const url = window.URL.createObjectURL(data);
                     const a = document.createElement('a');
                     a.href = url;
@@ -454,7 +492,7 @@ const Resources = () => {
                   } catch (error) {
                     console.error('Download error:', error);
 
-                    // Fallback: try direct URL download (works for public buckets)
+                    // Last-resort fallback: try raw URL (works only if bucket is public)
                     try {
                       const a = document.createElement('a');
                       a.href = resource.file_url;
