@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
+import UserProfile from "./pages/UserProfile";
 import Groups from "./pages/Groups";
 import Messages from "./pages/Messages";
 import Resources from "./pages/Resources";
@@ -89,6 +90,11 @@ const App = () => (
             <Route path="/profile" element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            } />
+            <Route path="/profile/:userId" element={
+              <ProtectedRoute>
+                <UserProfile />
               </ProtectedRoute>
             } />
             <Route path="/groups" element={

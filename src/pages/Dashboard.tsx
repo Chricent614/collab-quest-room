@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -8,10 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Heart, MessageCircle, Share2, ThumbsDown, Send, Image, Video, Radio, FileText } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
+import { Separator } from '@/components/ui/separator';
 
 interface Post {
   id: string;
+  author_id: string;
   content: string;
   content_type: string;
   image_url?: string;
@@ -20,6 +23,7 @@ interface Post {
   live_stream_url?: string;
   created_at: string;
   profiles: {
+    id: string;
     first_name: string;
     last_name: string;
     avatar_url?: string;
@@ -31,10 +35,13 @@ interface Post {
   comments: Array<{
     id: string;
     content: string;
+    author_id: string;
     created_at: string;
     profiles: {
+      id: string;
       first_name: string;
       last_name: string;
+      avatar_url?: string;
     };
   }>;
 }
@@ -42,16 +49,37 @@ interface Post {
 const Dashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPost, setNewPost] = useState('');
   const [postType, setPostType] = useState<'text' | 'photo' | 'video' | 'live'>('text');
   const [mediaUrl, setMediaUrl] = useState('');
   const [loading, setLoading] = useState(true);
+  const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null);
+  const [showComments, setShowComments] = useState<Record<string, boolean>>({});
+  const [commentText, setCommentText] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchPosts();
+    fetchCurrentUserProfile();
   }, []);
+
+  const fetchCurrentUserProfile = async () => {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+      
+      if (data) {
+        setCurrentUserProfileId(data.id);
+      }
+    } catch (error) {
+      console.error('Error fetching current user profile:', error);
+    }
+  };
 
   const fetchPosts = async () => {
     try {
@@ -59,13 +87,14 @@ const Dashboard = () => {
         .from('posts')
         .select(`
           *,
-          profiles (first_name, last_name, avatar_url),
+          profiles (id, first_name, last_name, avatar_url),
           post_reactions (reaction_type, user_id),
           comments (
             id,
             content,
+            author_id,
             created_at,
-            profiles (first_name, last_name)
+            profiles (id, first_name, last_name, avatar_url)
           )
         `)
         .order('created_at', { ascending: false });
@@ -169,22 +198,43 @@ const Dashboard = () => {
   };
 
   const reactToPost = async (postId: string, reactionType: 'like' | 'dislike') => {
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user?.id)
-        .single();
+    if (!currentUserProfileId) return;
 
-      if (!profile) throw new Error('Profile not found');
+    try {
+      // Optimistically update UI
+      setPosts(prevPosts => prevPosts.map(post => {
+        if (post.id !== postId) return post;
+
+        const existingReaction = post.post_reactions.find(r => r.user_id === currentUserProfileId);
+        let newReactions = [...post.post_reactions];
+
+        if (existingReaction) {
+          if (existingReaction.reaction_type === reactionType) {
+            // Remove reaction
+            newReactions = newReactions.filter(r => r.user_id !== currentUserProfileId);
+          } else {
+            // Update reaction
+            newReactions = newReactions.map(r => 
+              r.user_id === currentUserProfileId 
+                ? { ...r, reaction_type: reactionType }
+                : r
+            );
+          }
+        } else {
+          // Add new reaction
+          newReactions.push({ reaction_type: reactionType, user_id: currentUserProfileId });
+        }
+
+        return { ...post, post_reactions: newReactions };
+      }));
 
       // Check if user already reacted
       const { data: existingReaction } = await supabase
         .from('post_reactions')
         .select('*')
         .eq('post_id', postId)
-        .eq('user_id', profile.id)
-        .single();
+        .eq('user_id', currentUserProfileId)
+        .maybeSingle();
 
       if (existingReaction) {
         // Update existing reaction or remove if same type
@@ -205,15 +255,53 @@ const Dashboard = () => {
           .from('post_reactions')
           .insert({
             post_id: postId,
-            user_id: profile.id,
+            user_id: currentUserProfileId,
             reaction_type: reactionType
           });
       }
-
-      fetchPosts();
     } catch (error) {
       console.error('Error reacting to post:', error);
+      fetchPosts(); // Revert to actual state on error
     }
+  };
+
+  const addComment = async (postId: string) => {
+    const content = commentText[postId]?.trim();
+    if (!content || !currentUserProfileId) return;
+
+    try {
+      const { error } = await supabase
+        .from('comments')
+        .insert({
+          post_id: postId,
+          author_id: currentUserProfileId,
+          content
+        });
+
+      if (error) throw error;
+
+      setCommentText({ ...commentText, [postId]: '' });
+      fetchPosts();
+      toast({
+        title: "Success",
+        description: "Comment added!"
+      });
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add comment",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const toggleComments = (postId: string) => {
+    setShowComments({ ...showComments, [postId]: !showComments[postId] });
+  };
+
+  const getUserReaction = (post: Post, reactionType: 'like' | 'dislike') => {
+    return post.post_reactions.some(r => r.user_id === currentUserProfileId && r.reaction_type === reactionType);
   };
 
   if (loading) {
@@ -335,14 +423,20 @@ const Dashboard = () => {
         <Card key={post.id}>
           <CardHeader>
             <div className="flex items-center space-x-3">
-              <Avatar>
+              <Avatar 
+                className="cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => navigate(`/profile/${post.profiles.id}`)}
+              >
                 <AvatarImage src={post.profiles.avatar_url} />
                 <AvatarFallback>
                   {post.profiles.first_name?.charAt(0)}{post.profiles.last_name?.charAt(0)}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-medium">
+                <p 
+                  className="font-medium cursor-pointer hover:underline"
+                  onClick={() => navigate(`/profile/${post.profiles.id}`)}
+                >
                   {post.profiles.first_name} {post.profiles.last_name}
                 </p>
                 <p className="text-sm text-muted-foreground">
@@ -394,35 +488,107 @@ const Dashboard = () => {
               </div>
             )}
           </CardContent>
-          <CardFooter className="flex justify-between">
-            <div className="flex space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => reactToPost(post.id, 'like')}
-                className="text-muted-foreground hover:text-primary"
-              >
-                <Heart className="mr-1 h-4 w-4" />
-                {post.post_reactions?.filter(r => r.reaction_type === 'like').length || 0}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => reactToPost(post.id, 'dislike')}
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <ThumbsDown className="mr-1 h-4 w-4" />
-                {post.post_reactions?.filter(r => r.reaction_type === 'dislike').length || 0}
-              </Button>
+          <CardFooter className="flex-col items-stretch">
+            <div className="flex justify-between mb-4">
+              <div className="flex space-x-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => reactToPost(post.id, 'like')}
+                  className={getUserReaction(post, 'like') 
+                    ? "text-red-500 hover:text-red-600" 
+                    : "text-muted-foreground hover:text-red-500"}
+                >
+                  <Heart className={`mr-1 h-4 w-4 ${getUserReaction(post, 'like') ? 'fill-red-500' : ''}`} />
+                  {post.post_reactions?.filter(r => r.reaction_type === 'like').length || 0}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => reactToPost(post.id, 'dislike')}
+                  className={getUserReaction(post, 'dislike') 
+                    ? "text-blue-500 hover:text-blue-600" 
+                    : "text-muted-foreground hover:text-blue-500"}
+                >
+                  <ThumbsDown className={`mr-1 h-4 w-4 ${getUserReaction(post, 'dislike') ? 'fill-blue-500' : ''}`} />
+                  {post.post_reactions?.filter(r => r.reaction_type === 'dislike').length || 0}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-muted-foreground hover:text-primary"
+                  onClick={() => toggleComments(post.id)}
+                >
+                  <MessageCircle className="mr-1 h-4 w-4" />
+                  {post.comments?.length || 0}
+                </Button>
+              </div>
               <Button variant="ghost" size="sm" className="text-muted-foreground">
-                <MessageCircle className="mr-1 h-4 w-4" />
-                {post.comments?.length || 0}
+                <Share2 className="mr-1 h-4 w-4" />
+                Share
               </Button>
             </div>
-            <Button variant="ghost" size="sm" className="text-muted-foreground">
-              <Share2 className="mr-1 h-4 w-4" />
-              Share
-            </Button>
+
+            {showComments[post.id] && (
+              <div className="space-y-4">
+                <Separator />
+                
+                {/* Comments List */}
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {post.comments.map((comment) => (
+                    <div key={comment.id} className="flex gap-3">
+                      <Avatar 
+                        className="h-8 w-8 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => navigate(`/profile/${comment.profiles.id}`)}
+                      >
+                        <AvatarImage src={comment.profiles.avatar_url} />
+                        <AvatarFallback className="text-xs">
+                          {comment.profiles.first_name?.charAt(0)}{comment.profiles.last_name?.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="bg-muted rounded-lg p-3">
+                          <p 
+                            className="font-medium text-sm cursor-pointer hover:underline mb-1"
+                            onClick={() => navigate(`/profile/${comment.profiles.id}`)}
+                          >
+                            {comment.profiles.first_name} {comment.profiles.last_name}
+                          </p>
+                          <p className="text-sm">{comment.content}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 ml-3">
+                          {new Date(comment.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {post.comments.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">No comments yet</p>
+                  )}
+                </div>
+
+                {/* Add Comment */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Write a comment..."
+                    value={commentText[post.id] || ''}
+                    onChange={(e) => setCommentText({ ...commentText, [post.id]: e.target.value })}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        addComment(post.id);
+                      }
+                    }}
+                  />
+                  <Button 
+                    size="sm"
+                    onClick={() => addComment(post.id)}
+                    disabled={!commentText[post.id]?.trim()}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardFooter>
         </Card>
       ))}
