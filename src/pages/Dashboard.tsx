@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Heart, MessageCircle, Share2, ThumbsDown, Send, Image, Video, Radio, FileText } from 'lucide-react';
+import { Heart, MessageCircle, Share2, ThumbsDown, Send, Image, Video, Radio, FileText, Copy, Check } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -58,6 +58,7 @@ const Dashboard = () => {
   const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null);
   const [showComments, setShowComments] = useState<Record<string, boolean>>({});
   const [commentText, setCommentText] = useState<Record<string, string>>({});
+  const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -304,6 +305,26 @@ const Dashboard = () => {
     return post.post_reactions.some(r => r.user_id === currentUserProfileId && r.reaction_type === reactionType);
   };
 
+  const sharePost = async (postId: string) => {
+    try {
+      const postUrl = `${window.location.origin}/dashboard?post=${postId}`;
+      await navigator.clipboard.writeText(postUrl);
+      setCopiedPostId(postId);
+      toast({
+        title: "Link copied!",
+        description: "Post link copied to clipboard"
+      });
+      setTimeout(() => setCopiedPostId(null), 2000);
+    } catch (error) {
+      console.error('Error sharing post:', error);
+      toast({
+        title: "Error",
+        description: "Failed to copy link",
+        variant: "destructive"
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -523,9 +544,18 @@ const Dashboard = () => {
                   {post.comments?.length || 0}
                 </Button>
               </div>
-              <Button variant="ghost" size="sm" className="text-muted-foreground">
-                <Share2 className="mr-1 h-4 w-4" />
-                Share
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-muted-foreground hover:text-primary"
+                onClick={() => sharePost(post.id)}
+              >
+                {copiedPostId === post.id ? (
+                  <Check className="mr-1 h-4 w-4 text-green-500" />
+                ) : (
+                  <Share2 className="mr-1 h-4 w-4" />
+                )}
+                {copiedPostId === post.id ? 'Copied!' : 'Share'}
               </Button>
             </div>
 

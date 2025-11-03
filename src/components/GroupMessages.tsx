@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, Check, CheckCheck } from 'lucide-react';
+import { Send, MessageCircle, Check, CheckCheck, Paperclip, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
@@ -15,6 +15,8 @@ interface Message {
   content: string;
   created_at: string;
   sender_id: string;
+  file_url?: string;
+  file_name?: string;
   sender?: {
     first_name: string;
     last_name: string;
@@ -36,7 +38,10 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [myProfile, setMyProfile] = useState<any>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user && groupId) {
@@ -187,14 +192,81 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
     };
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      toast({
+        title: "File selected",
+        description: `${file.name} ready to send`
+      });
+    }
+  };
+
+  const uploadFile = async (file: File) => {
+    if (!user) return null;
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('message-files')
+      .upload(fileName, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('message-files')
+      .getPublicUrl(fileName);
+
+    return { url: publicUrl, name: file.name };
+  };
+
+  const downloadFile = async (fileUrl: string, fileName: string) => {
+    try {
+      const response = await fetch(fileUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Success",
+        description: "File downloaded"
+      });
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      toast({
+        title: "Error",
+        description: "Failed to download file",
+        variant: "destructive"
+      });
+    }
+  };
+
   const sendMessage = async () => {
-    if (!newMessage.trim() || !myProfile) return;
+    if ((!newMessage.trim() && !selectedFile) || !myProfile) return;
 
     try {
+      setUploading(true);
+      let fileUrl = null;
+      let fileName = null;
+
+      if (selectedFile) {
+        const fileData = await uploadFile(selectedFile);
+        fileUrl = fileData?.url;
+        fileName = fileData?.name;
+      }
+
       const { error } = await supabase
         .from('posts')
         .insert({
-          content: newMessage,
+          content: newMessage.trim() || (fileName ? `Sent file: ${fileName}` : ''),
           content_type: 'text',
           author_id: myProfile.id,
           group_id: groupId
@@ -203,6 +275,13 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
       if (error) throw error;
 
       setNewMessage('');
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      
+      toast({
+        title: "Success",
+        description: fileName ? "File sent successfully" : "Message sent"
+      });
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -210,11 +289,13 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
         description: "Failed to send message",
         variant: "destructive"
       });
+    } finally {
+      setUploading(false);
     }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !uploading) {
       e.preventDefault();
       sendMessage();
     }
@@ -274,6 +355,17 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
                       }`}
                     >
                       <p className="text-sm">{message.content}</p>
+                      {message.file_url && message.file_name && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-2 flex items-center gap-2"
+                          onClick={() => downloadFile(message.file_url!, message.file_name!)}
+                        >
+                          <Download className="h-4 w-4" />
+                          {message.file_name}
+                        </Button>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-1 mt-1">
@@ -308,15 +400,44 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
         </ScrollArea>
         
         <div className="border-t p-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          {selectedFile && (
+            <div className="mb-2 p-2 bg-muted rounded flex items-center justify-between">
+              <span className="text-sm truncate">{selectedFile.name}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedFile(null);
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          )}
           <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
             <Input
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Type a message..."
               className="flex-1"
+              disabled={uploading}
             />
-            <Button onClick={sendMessage} disabled={!newMessage.trim()}>
+            <Button onClick={sendMessage} disabled={(!newMessage.trim() && !selectedFile) || uploading}>
               <Send className="h-4 w-4" />
             </Button>
           </div>

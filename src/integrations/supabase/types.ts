@@ -349,6 +349,8 @@ export type Database = {
         Row: {
           content: string
           created_at: string | null
+          file_name: string | null
+          file_url: string | null
           id: string
           read_at: string | null
           receiver_id: string
@@ -357,6 +359,8 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string | null
+          file_name?: string | null
+          file_url?: string | null
           id?: string
           read_at?: string | null
           receiver_id: string
@@ -365,6 +369,8 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string | null
+          file_name?: string | null
+          file_url?: string | null
           id?: string
           read_at?: string | null
           receiver_id?: string
