@@ -191,21 +191,13 @@ const FriendSuggestions = ({ onStartConversation }: FriendSuggestionsProps) => {
                 )}
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onStartConversation(suggestion.id)}
-              >
-                Message
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => sendFriendRequest(suggestion.id)}
-              >
-                <UserPlus className="h-3 w-3" />
-              </Button>
-            </div>
+            <Button
+              size="sm"
+              onClick={() => sendFriendRequest(suggestion.id)}
+            >
+              <UserPlus className="h-3 w-3 mr-2" />
+              Add Friend
+            </Button>
           </div>
         ))}
         {suggestions.length > 3 && (
