@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
-import { GraduationCap, Bell, Search } from 'lucide-react';
+import { GraduationCap, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useNavigate } from 'react-router-dom';
+import NotificationBell from '@/components/NotificationBell';
 
 const AppHeader = () => {
   const { user, signOut } = useAuth();
@@ -47,9 +48,7 @@ const AppHeader = () => {
         </form>
 
         <div className="flex items-center space-x-2 md:space-x-4">
-          <Button variant="ghost" size="icon" className="h-9 w-9">
-            <Bell className="h-4 w-4 md:h-5 md:w-5" />
-          </Button>
+          <NotificationBell />
           
           <div className="flex items-center space-x-2">
             <Avatar className="h-7 w-7 md:h-8 md:w-8">
