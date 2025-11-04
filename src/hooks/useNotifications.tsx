@@ -24,7 +24,11 @@ export const useNotifications = () => {
     if (!user) return;
 
     fetchNotifications();
-    setupRealtimeSubscription();
+    const cleanup = setupRealtimeSubscription();
+    
+    return () => {
+      if (cleanup) cleanup();
+    };
   }, [user]);
 
   const fetchNotifications = async () => {

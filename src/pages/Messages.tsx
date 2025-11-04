@@ -267,6 +267,18 @@ const Messages = () => {
         .eq('content_type', 'text')
         .order('created_at', { ascending: false }) : { data: [] };
 
+      // Count unread messages
+      const { data: unreadMessages } = await supabase
+        .from('private_messages')
+        .select('sender_id')
+        .eq('receiver_id', profile.id)
+        .is('read_at', null);
+
+      const unreadCounts = new Map<string, number>();
+      unreadMessages?.forEach(msg => {
+        unreadCounts.set(msg.sender_id, (unreadCounts.get(msg.sender_id) || 0) + 1);
+      });
+
       // Process conversations - filter for verified emails only
       const conversationMap = new Map<string, Conversation>();
       
@@ -284,7 +296,7 @@ const Messages = () => {
             avatar_url: otherUser.avatar_url,
             last_message: message.content,
             last_message_time: message.created_at,
-            unread_count: 0,
+            unread_count: unreadCounts.get(otherUserId) || 0,
             is_group: false
           });
         }
@@ -357,6 +369,17 @@ const Messages = () => {
 
       if (error) throw error;
       setMessages(data || []);
+      
+      // Mark received messages as read
+      await supabase
+        .from('private_messages')
+        .update({ read_at: new Date().toISOString() })
+        .eq('sender_id', otherUserId)
+        .eq('receiver_id', profile.id)
+        .is('read_at', null);
+
+      // Refresh conversations to update unread counts
+      fetchConversations();
     } catch (error) {
       console.error('Error fetching messages:', error);
     }
@@ -863,32 +886,53 @@ const Messages = () => {
                 ) : (
                   conversations.map((conversation) => (
                       <div
-                        key={conversation.user_id}
+                        key={conversation.user_id || conversation.group_id}
                         className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
                           selectedConversation === conversation.user_id && !showChatbot ? 'bg-muted' : ''
                         }`}
                     onClick={() => {
-                      setSelectedConversation(conversation.user_id);
+                      if (conversation.is_group) {
+                        setSelectedGroupId(conversation.group_id!);
+                        setSelectedConversation(null);
+                      } else {
+                        setSelectedConversation(conversation.user_id!);
+                        setSelectedGroupId(null);
+                      }
                       setShowChatbot(false);
                     }}
                   >
                       <div className="flex items-center space-x-3">
-                        <Avatar>
-                          <AvatarImage src={conversation.avatar_url} />
-                          <AvatarFallback>
-                            {conversation.user_name.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{conversation.user_name}</p>
-                          {conversation.last_message && (
-                            <p className="text-sm text-muted-foreground truncate">
-                              {conversation.last_message}
-                            </p>
+                        <div className="relative">
+                          <Avatar>
+                            <AvatarImage src={conversation.avatar_url} />
+                            <AvatarFallback>
+                              {conversation.is_group ? (
+                                <Users className="h-4 w-4" />
+                              ) : (
+                                conversation.user_name.split(' ').map(n => n[0]).join('')
+                              )}
+                            </AvatarFallback>
+                          </Avatar>
+                          {conversation.unread_count > 0 && (
+                            <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold">
+                              {conversation.unread_count > 9 ? '9+' : conversation.unread_count}
+                            </div>
                           )}
-                          {conversation.last_message_time && (
-                            <p className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: true })}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className={`font-medium truncate ${conversation.unread_count > 0 ? 'font-bold' : ''}`}>
+                              {conversation.user_name}
+                            </p>
+                            {conversation.last_message_time && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: false })}
+                              </span>
+                            )}
+                          </div>
+                          {conversation.last_message && (
+                            <p className={`text-sm truncate ${conversation.unread_count > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                              {conversation.last_message}
                             </p>
                           )}
                         </div>

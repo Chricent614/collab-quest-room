@@ -1,3 +1,4 @@
+import React from 'react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,8 +16,10 @@ import { Separator } from '@/components/ui/separator';
 const NotificationBell = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
+  const [open, setOpen] = React.useState(false);
 
   const handleNotificationClick = (notification: any) => {
+    setOpen(false);
     if (!notification.read) {
       markAsRead(notification.id);
     }
@@ -41,7 +44,7 @@ const NotificationBell = () => {
   };
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="h-9 w-9 relative">
           <Bell className="h-4 w-4 md:h-5 md:w-5" />
