@@ -4,11 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, Check, CheckCheck, Paperclip, Download } from 'lucide-react';
+import { Send, MessageCircle, Check, CheckCheck, Paperclip, Download, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
+import VoiceRecorder from './VoiceRecorder';
+import VoicePlayer from './VoicePlayer';
 
 interface Message {
   id: string;
@@ -42,6 +44,7 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
   const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user && groupId) {
@@ -203,6 +206,68 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
     }
   };
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedFile(file);
+      toast({
+        title: "Image selected",
+        description: `${file.name} ready to send`
+      });
+    } else {
+      toast({
+        title: "Invalid file",
+        description: "Please select an image file",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleVoiceSend = async (audioBlob: Blob) => {
+    if (!myProfile) return;
+
+    try {
+      setUploading(true);
+      
+      // Upload voice message
+      const fileName = `${user?.id}/${Date.now()}.webm`;
+      const { error: uploadError } = await supabase.storage
+        .from('group-files')
+        .upload(fileName, audioBlob);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('group-files')
+        .getPublicUrl(fileName);
+
+      const { error } = await supabase
+        .from('posts')
+        .insert({
+          content: '🎤 Voice message',
+          content_type: 'text',
+          author_id: myProfile.id,
+          group_id: groupId
+        });
+
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Voice message sent"
+      });
+    } catch (error) {
+      console.error('Error sending voice message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send voice message",
+        variant: "destructive"
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const uploadFile = async (file: File) => {
     if (!user) return null;
 
@@ -354,8 +419,19 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
                           : 'bg-muted'
                       }`}
                     >
-                      <p className="text-sm">{message.content}</p>
-                      {message.file_url && message.file_name && (
+                      {message.file_url && message.file_name?.endsWith('.webm') ? (
+                        <VoicePlayer audioUrl={message.file_url} />
+                      ) : message.file_url && message.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                        <img 
+                          src={message.file_url} 
+                          alt={message.file_name}
+                          className="max-w-full rounded cursor-pointer"
+                          onClick={() => window.open(message.file_url, '_blank')}
+                        />
+                      ) : (
+                        <p className="text-sm">{message.content}</p>
+                      )}
+                      {message.file_url && message.file_name && !message.file_name.endsWith('.webm') && !message.file_name.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -406,15 +482,31 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
             onChange={handleFileSelect}
             className="hidden"
           />
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            className="hidden"
+          />
           {selectedFile && (
             <div className="mb-2 p-2 bg-muted rounded flex items-center justify-between">
-              <span className="text-sm truncate">{selectedFile.name}</span>
+              {selectedFile.type.startsWith('image/') ? (
+                <img 
+                  src={URL.createObjectURL(selectedFile)} 
+                  alt="Preview"
+                  className="h-20 object-contain rounded"
+                />
+              ) : (
+                <span className="text-sm truncate">{selectedFile.name}</span>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
                   setSelectedFile(null);
                   if (fileInputRef.current) fileInputRef.current.value = '';
+                  if (imageInputRef.current) imageInputRef.current.value = '';
                 }}
               >
                 Remove
@@ -422,6 +514,14 @@ const GroupMessages = ({ groupId, groupName }: GroupMessagesProps) => {
             </div>
           )}
           <div className="flex gap-2">
+            <VoiceRecorder onSendVoice={handleVoiceSend} disabled={uploading} />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => imageInputRef.current?.click()}
+            >
+              <ImageIcon className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
