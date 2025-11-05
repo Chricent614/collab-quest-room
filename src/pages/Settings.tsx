@@ -175,9 +175,13 @@ const Settings = () => {
             <Label htmlFor="theme">Theme</Label>
             <Select
               value={settings.theme}
-              onValueChange={(value: 'light' | 'dark') => 
-                setSettings({ ...settings, theme: value })
-              }
+              onValueChange={(value: 'light' | 'dark') => {
+                setSettings({ ...settings, theme: value });
+                // Apply theme immediately
+                const root = window.document.documentElement;
+                root.classList.remove('light', 'dark');
+                root.classList.add(value);
+              }}
             >
               <SelectTrigger>
                 <SelectValue />

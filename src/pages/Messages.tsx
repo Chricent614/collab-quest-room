@@ -15,6 +15,7 @@ import FriendSuggestions from '@/components/FriendSuggestions';
 import VoiceRecorder from '@/components/VoiceRecorder';
 import VoicePlayer from '@/components/VoicePlayer';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 interface Message {
   id: string;
@@ -51,6 +52,7 @@ const Messages = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { isOnline } = useOnlineStatus();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -937,31 +939,31 @@ const Messages = () => {
                                 )}
                               </AvatarFallback>
                             </Avatar>
-                            {conversation.unread_count > 0 && (
-                              <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold">
-                                {conversation.unread_count}
-                              </div>
+                            {!conversation.is_group && isOnline(conversation.user_id!) && (
+                              <div className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 border-2 border-background rounded-full" />
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <p className="font-medium truncate">{conversation.user_name}</p>
-                              {conversation.last_message_time && (
-                                <span className="text-xs text-muted-foreground ml-2">
-                                  {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: false })}
-                                </span>
-                              )}
                             </div>
                             {conversation.last_message && (
                               <p className="text-sm text-muted-foreground truncate">
                                 {conversation.last_message}
                               </p>
                             )}
-                            {conversation.last_message_time && (
-                              <p className="text-xs text-muted-foreground">
-                                {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: true })}
-                              </p>
-                            )}
+                            <div className="flex items-center justify-between mt-1">
+                              {conversation.last_message_time && (
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: true })}
+                                </span>
+                              )}
+                              {conversation.unread_count > 0 && (
+                                <div className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5 font-semibold">
+                                  {conversation.unread_count}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1034,10 +1036,8 @@ const Messages = () => {
                               )}
                             </AvatarFallback>
                           </Avatar>
-                          {conversation.unread_count > 0 && (
-                            <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold">
-                              {conversation.unread_count > 9 ? '9+' : conversation.unread_count}
-                            </div>
+                          {!conversation.is_group && isOnline(conversation.user_id!) && (
+                            <div className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 border-2 border-background rounded-full" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -1045,17 +1045,24 @@ const Messages = () => {
                             <p className={`font-medium truncate ${conversation.unread_count > 0 ? 'font-bold' : ''}`}>
                               {conversation.user_name}
                             </p>
-                            {conversation.last_message_time && (
-                              <span className="text-xs text-muted-foreground ml-2">
-                                {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: false })}
-                              </span>
-                            )}
                           </div>
                           {conversation.last_message && (
                             <p className={`text-sm truncate ${conversation.unread_count > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                               {conversation.last_message}
                             </p>
                           )}
+                          <div className="flex items-center justify-between mt-1">
+                            {conversation.last_message_time && (
+                              <span className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(new Date(conversation.last_message_time), { addSuffix: true })}
+                              </span>
+                            )}
+                            {conversation.unread_count > 0 && (
+                              <div className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5 font-semibold">
+                                {conversation.unread_count > 9 ? '9+' : conversation.unread_count}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
