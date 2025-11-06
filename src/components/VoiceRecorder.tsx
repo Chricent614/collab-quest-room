@@ -19,6 +19,18 @@ const VoiceRecorder = ({ onSendVoice, disabled }: VoiceRecorderProps) => {
 
   const startRecording = async () => {
     try {
+      // Check and request microphone permission first
+      const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      
+      if (permissionStatus.state === 'denied') {
+        toast({
+          title: "Microphone Access Denied",
+          description: "Please enable microphone access in your browser settings to record voice messages.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       // Request microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, {
