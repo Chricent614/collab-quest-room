@@ -19,6 +19,7 @@ const VoiceRecorder = ({ onSendVoice, disabled }: VoiceRecorderProps) => {
 
   const startRecording = async () => {
     try {
+      // Request microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
@@ -125,11 +126,12 @@ const VoiceRecorder = ({ onSendVoice, disabled }: VoiceRecorderProps) => {
   return (
     <Button
       variant="ghost"
-      size="icon"
+      size="lg"
       onClick={startRecording}
       disabled={disabled}
+      className="bg-green-500 hover:bg-green-600 text-white rounded-full"
     >
-      <Mic className="h-4 w-4" />
+      <Mic className="h-6 w-6" />
     </Button>
   );
 };

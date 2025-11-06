@@ -1,24 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
-import { GraduationCap, Search } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { GraduationCap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import NotificationBell from '@/components/NotificationBell';
+import { supabase } from '@/integrations/supabase/client';
+import GlobalSearch from '@/components/GlobalSearch';
 
 const AppHeader = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/dashboard?search=${encodeURIComponent(searchQuery)}`);
-    }
-  };
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.id) return;
+      
+      const { data } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (data?.avatar_url) {
+        setAvatarUrl(data.avatar_url);
+      }
+    };
+
+    fetchUserProfile();
+  }, [user]);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border h-16">
@@ -35,24 +47,14 @@ const AppHeader = () => {
           </div>
         </div>
 
-        <form onSubmit={handleSearch} className="flex-1 max-w-md mx-2 md:mx-8">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search..." 
-              className="pl-10 h-9"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </form>
+        <GlobalSearch />
 
         <div className="flex items-center space-x-2 md:space-x-4">
           <NotificationBell />
           
           <div className="flex items-center space-x-2">
-            <Avatar className="h-7 w-7 md:h-8 md:w-8">
-              <AvatarImage src="/placeholder.svg" />
+            <Avatar className="h-7 w-7 md:h-8 md:w-8 cursor-pointer" onClick={() => navigate('/profile')}>
+              <AvatarImage src={avatarUrl || undefined} />
               <AvatarFallback>
                 {user?.email?.charAt(0).toUpperCase()}
               </AvatarFallback>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Home, Users, MessageCircle, Settings, User, Newspaper, Heart, Search, Plus, BookOpen, ClipboardList, PenTool } from "lucide-react";
+import { Home, Users, MessageCircle, Settings, User, Heart, Plus, BookOpen, ClipboardList, PenTool, Menu } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import {
@@ -44,7 +44,9 @@ export function AppSidebar() {
       className={state === "collapsed" ? "w-14" : "w-60"}
       collapsible="icon"
     >
-      <SidebarTrigger className="m-2 self-end" />
+      <SidebarTrigger className="m-2 self-end">
+        <Menu className="h-5 w-5" />
+      </SidebarTrigger>
 
       <SidebarContent>
         <SidebarGroup>

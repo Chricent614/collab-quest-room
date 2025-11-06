@@ -8,6 +8,7 @@ import { Search, UserPlus, Users, MessageCircle, Mail, GraduationCap } from 'luc
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
+import { FriendSuggestionEngine } from '@/components/FriendSuggestionEngine';
 
 interface Profile {
   id: string;
@@ -278,6 +279,9 @@ const FindFriends = () => {
         <h1 className="text-2xl sm:text-3xl font-bold">Find Friends</h1>
         <p className="text-muted-foreground">Connect with other students and expand your network</p>
       </div>
+
+      {/* AI-Powered Suggestions */}
+      <FriendSuggestionEngine />
 
       {/* Search */}
       <Card>
