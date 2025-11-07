@@ -392,13 +392,29 @@ const Messages = () => {
         .eq('receiver_id', profile.id)
         .is('read_at', null);
 
-      // Also mark related notifications as read
-      await supabase
+      // Also mark related notifications as read for this specific sender
+      const { data: notifications } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .select('id, metadata')
         .eq('user_id', profile.id)
         .eq('type', 'message')
         .eq('read', false);
+
+      if (notifications && notifications.length > 0) {
+        const notificationIds = notifications
+          .filter(n => {
+            const metadata = n.metadata as any;
+            return metadata?.sender_id === otherUserId;
+          })
+          .map(n => n.id);
+        
+        if (notificationIds.length > 0) {
+          await supabase
+            .from('notifications')
+            .update({ read: true })
+            .in('id', notificationIds);
+        }
+      }
 
       // Refresh conversations to update unread counts
       fetchConversations();
