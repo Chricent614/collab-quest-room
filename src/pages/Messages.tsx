@@ -392,6 +392,14 @@ const Messages = () => {
         .eq('receiver_id', profile.id)
         .is('read_at', null);
 
+      // Also mark related notifications as read
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', profile.id)
+        .eq('type', 'message')
+        .eq('read', false);
+
       // Refresh conversations to update unread counts
       fetchConversations();
     } catch (error) {
